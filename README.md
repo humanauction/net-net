@@ -6,12 +6,10 @@ Real-Time Network Monitor (C++)
 
 A modular network monitor that captures packets, tracks active connections, and aggregates per-interface bandwidth and protocol statistics. Includes an optional Qt dashboard for live visualization.
 
-## Project structure (recommended)
-
-Code
+## Project structure
 
 ```bash
-netmon/
+net-net/
 ├─ src/
 │  ├─ core/
 │  │  ├─ PacketCapture.cpp
