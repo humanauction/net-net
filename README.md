@@ -35,7 +35,7 @@ net-net/
 │  │  └─ ConfigLoader.cpp
 │  └─ main.cpp
 ├─ include/
-│  └─ netmon/   (public headers for library usage)
+│  └─ net-net/   (public headers for library usage)
 ├─ tests/
 │  ├─ unit/
 │  └─ integration/
