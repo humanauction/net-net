@@ -131,7 +131,7 @@ See docs/design.md for full architecture.
 
 - API: startCapture(interface, callback), stopCapture(), setFilter(bpf).
 
-- Tests: unit tests mocking adapter; integration test capturing from pcap file (pcap-ng).
+- Tests: unit tests mocking adapter; integration test capturing from pcap file (see: [sample.pcap](tests/fixtures/sample.pcap)). Need quickstart localhost  [ICMP packets?](#samplepcap)
 
 ### Stage 2 — Parser and connection tracker (6–8 days)
 
@@ -243,16 +243,15 @@ Implement NetMonDaemon to run headless.
 
 - For desktop users, ship Qt app as separate artifact; use installer or AppImage on Linux.
 
-## Deliverables checklist
+# Test Fixtures
 
-- Clean README with architecture diagram in docs/design.md.
+## sample.pcap
 
-- Buildable CMake project and sample-config.yaml.
+10 ICMP echo request/reply packets captured from localhost.
 
-- Unit and integration tests with coverage report.
-
-- Dockerfile for headless daemon.
-
-- Qt dashboard binary or screenshots/gif of live UI.
-
-- Short demo video (90–120s) showing capture -> UI visualization.
+**To regenerate:**
+```bash
+sudo tcpdump -i lo0 -w sample.pcap &
+ping -c 5 127.0.0.1
+sudo killall tcpdump
+```
