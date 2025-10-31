@@ -40,3 +40,19 @@ TEST(PcapAdapterTest, InvalidInterface) {
     PcapAdapter adapter(opts);
     EXPECT_THROW(adapter.startCapture([](auto,auto,auto){}), std::runtime_error);
 }
+
+TEST(PcapAdapterTest, InvalidOptions) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "";  // Empty interface
+    
+    EXPECT_THROW({
+        PcapAdapter adapter(opts);
+    }, std::invalid_argument);
+    
+    opts.iface_or_file = "lo0";
+    opts.snaplen = -1;  // Invalid snaplen
+    
+    EXPECT_THROW({
+        PcapAdapter adapter(opts);
+    }, std::invalid_argument);
+}

@@ -131,7 +131,7 @@ See docs/design.md for full architecture.
 
 - API: startCapture(interface, callback), stopCapture(), setFilter(bpf).
 
-- Tests: unit tests mocking adapter; integration test capturing from pcap file (see: [sample.pcap](tests/fixtures/sample.pcap)). Need quickstart localhost  [ICMP packets?](#samplepcap)
+- Tests: unit tests mocking adapter; integration test capturing from pcap file (see: [sample.pcap](tests/fixtures/sample.pcap)). Bonus: [regenerate](#samplepcap) localhost ICMP packets.
 
 ### Stage 2 — Parser and connection tracker (6–8 days)
 
@@ -243,13 +243,14 @@ Implement NetMonDaemon to run headless.
 
 - For desktop users, ship Qt app as separate artifact; use installer or AppImage on Linux.
 
-# Test Fixtures
+## Test Fixtures
 
-## sample.pcap
+### sample.pcap
 
 10 ICMP echo request/reply packets captured from localhost.
 
 **To regenerate:**
+
 ```bash
 sudo tcpdump -i lo0 -w sample.pcap &
 ping -c 5 127.0.0.1

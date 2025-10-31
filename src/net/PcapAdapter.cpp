@@ -30,6 +30,18 @@ void pcap_bridge(u_char* user, const struct pcap_pkthdr* hdr, const u_char* data
 
 PcapAdapter::PcapAdapter(const Options& opts) 
     : impl_(std::make_unique<Impl>()) {
+        // Validate options
+    if (opts.iface_or_file.empty()) {
+        throw std::invalid_argument("Interface or file path cannot be empty");
+    }
+    
+    if (opts.snaplen <= 0 || opts.snaplen > 65535) {
+        throw std::invalid_argument("Snaplen must be between 1 and 65535");
+    }
+    
+    if (opts.timeout_ms < 0) {
+        throw std::invalid_argument("Timeout cannot be negative");
+    }
     impl_->opts = opts;
     impl_->source_name = opts.iface_or_file;
 }

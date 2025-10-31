@@ -19,6 +19,18 @@ class PcapAdapter {
 public:
     struct Options{
         std::string iface_or_file;
+        // BPF filter expression (see examples below)
+        // Examples:
+        //   "tcp"                      - TCP traffic only
+        //   "tcp port 80"              - HTTP traffic
+        //   "tcp port 80 or tcp port 443" - HTTP/HTTPS
+        //   "udp port 53"              - DNS queries
+        //   "host 192.168.1.1"         - Traffic to/from IP
+        //   "net 192.168.0.0/16"       - Traffic in subnet
+        //   "not tcp port 22"          - Everything except SSH
+        //   "icmp"                     - ICMP (ping) only
+        //   "tcp[tcpflags] & (tcp-syn) != 0" - TCP SYN packets
+        // Full syntax: https://www.tcpdump.org/manpages/pcap-filter.7.html
         std::string bpf_filter;
         bool promiscuous = true;
         int snaplen = 65535;
@@ -37,7 +49,10 @@ public:
     void startCapture(PacketCallback cb);
     // Stop capture.
     void stopCapture();
-    // Apply BPF filter at runtime; throws on error.
+    // Throws std::runtime_error if filter is invalid
+    // Examples:
+    //   setFilter("tcp port 443");  // Switch to HTTPS only
+    //   setFilter("");              // Remove filter (capture all)
     void setFilter(const std::string& bpf);
     // Source name can be interface or file
     std::string source() const noexcept;
