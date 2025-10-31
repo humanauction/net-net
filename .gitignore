@@ -12,7 +12,6 @@ install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
 _deps/
-*.cmake
 
 # Compiled binaries
 *.o
@@ -29,6 +28,7 @@ _deps/
 netmon
 netmon-ui
 netnet
+test_runner  # ← ADD THIS
 
 # IDE and editor files
 .vscode/
@@ -54,7 +54,7 @@ qrc_*.cpp
 ui_*.h
 
 # Test outputs
-Testing/
+Testing/  # ← Already listed but verify it's working
 tests/output/
 *.log
 

@@ -38,3 +38,26 @@ target_link_libraries(netnet
     PRIVATE
         netnet-core
 )
+
+# Testing
+enable_testing()
+
+find_package(GTest REQUIRED)
+
+add_executable(test_runner 
+    tests/unit/test_pcap_adapter.cpp
+)
+
+target_link_libraries(test_runner
+    PRIVATE
+        netnet-core
+        GTest::GTest
+        GTest::Main
+)
+
+target_compile_definitions(test_runner
+    PRIVATE
+        CMAKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
+add_test(NAME PcapAdapterTests COMMAND test_runner)
