@@ -1,0 +1,112 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+*.cmake
+
+# Compiled binaries
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.a
+*.lib
+
+# Executables
+netmon
+netmon-ui
+netnet
+
+# IDE and editor files
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+.clangd/
+.cache/
+
+# Qt generated files
+*.pro.user
+*.pro.user.*
+*.qmlc
+*.jsc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# Test outputs
+Testing/
+tests/output/
+*.log
+
+# Coverage reports
+*.gcda
+*.gcno
+*.gcov
+coverage/
+*.info
+
+# Sanitizer outputs
+*.dSYM/
+*.asan
+*.ubsan
+*.tsan
+
+# Package files
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+
+# Valgrind
+*.valgrind
+
+# Core dumps
+core
+core.*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Documentation generated files
+docs/html/
+docs/latex/
+doxygen_warnings.txt
+
+# Backup files
+*.bak
+*.backup

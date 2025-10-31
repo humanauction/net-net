@@ -14,7 +14,7 @@ struct PcapAdapter::Impl {
     std::mutex filter_mtx;
 };
 
-static void pcap_bridge(u_char* user, const struct pcap_pkthdr* hdr, const u_char* data) {
+void pcap_bridge(u_char* user, const struct pcap_pkthdr* hdr, const u_char* data) {
     auto* impl = reinterpret_cast<PcapAdapter::Impl*>(user);
     if (!impl->callback) return;
     

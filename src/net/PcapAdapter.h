@@ -39,12 +39,13 @@ public:
     void stopCapture();
     // Apply BPF filter at runtime; throws on error.
     void setFilter(const std::string& bpf);
-
     // Source name can be interface or file
     std::string source() const noexcept;
 
-    private:
-        struct Impl;
-        std::unique_ptr<Impl> impl_;
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+
+    friend void pcap_bridge(unsigned char*, const struct pcap_pkthdr*, const unsigned char*);
 };
 
