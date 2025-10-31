@@ -115,144 +115,144 @@ Work divided into five stages. Each stage lists deliverables and focused tests.
 
 See docs/design.md for full architecture.
 
--   Deliverables: design.md with data model, packet flow, modules, public API.
+- Deliverables: design.md with data model, packet flow, modules, public API.
 
--   Decide capture backend (libpcap) and privilege model.
+- Decide capture backend (libpcap) and privilege model.
 
--   Define config schema (YAML): interfaces, samplingInterval, aggregationWindow, alertRules.
+- Define config schema (YAML): interfaces, samplingInterval, aggregationWindow, alertRules.
 
--   Tests: design review checklist.
+- Tests: design review checklist.
 
 ### Stage 1 — Core capture and adapter layer (4–6 days)
 
--   Implement PcapAdapter (wrapper around libpcap) with clean, testable interface.
+- Implement PcapAdapter (wrapper around libpcap) with clean, testable interface.
 
--   Implement RawSocketAdapter only if targeting platforms without libpcap.
+- Implement RawSocketAdapter only if targeting platforms without libpcap.
 
--   API: startCapture(interface, callback), stopCapture(), setFilter(bpf).
+- API: startCapture(interface, callback), stopCapture(), setFilter(bpf).
 
--   Tests: unit tests mocking adapter; integration test capturing from pcap file (pcap-ng).
+- Tests: unit tests mocking adapter; integration test capturing from pcap file (pcap-ng).
 
 ### Stage 2 — Parser and connection tracker (6–8 days)
 
--   Implement Parser for Ethernet -> IPv4/IPv6 -> Transport (TCP/UDP/ICMP).
+- Implement Parser for Ethernet -> IPv4/IPv6 -> Transport (TCP/UDP/ICMP).
 
--   Implement ConnectionTracker: tracks flows by 5-tuple, timestamps, simple state (established, closed, idle).
+- Implement ConnectionTracker: tracks flows by 5-tuple, timestamps, simple state (established, closed, idle).
 
--   Implement throughput counters per flow and per interface.
+- Implement throughput counters per flow and per interface.
 
--   Tests: unit tests for parsing sample packets; synthetic pcap files to validate flow assembly.
+- Tests: unit tests for parsing sample packets; synthetic pcap files to validate flow assembly.
 
 ### Stage 3 — Stats aggregation and persistence (4–6 days)
 
--   Implement StatsAggregator which consumes parsed events and outputs rolling-window metrics.
+- Implement StatsAggregator which consumes parsed events and outputs rolling-window metrics.
 
--   Support configurable windows: 1s, 10s, 60s.
+- Support configurable windows: 1s, 10s, 60s.
 
--   Provide an in-memory ring buffer and optional disk-backed persistence (SQLite) for historical queries.
+- Provide an in-memory ring buffer and optional disk-backed persistence (SQLite) for historical queries.
 
--   Tests: unit tests for aggregation math; integration test verifying outputs over recorded pcap simulation.
+- Tests: unit tests for aggregation math; integration test verifying outputs over recorded pcap simulation.
 
 ### Stage 4 — CLI daemon + REST API (optional) (5–7 days)
 
 Implement NetMonDaemon to run headless.
 
--   Add a small REST API (cpp-httplib or Crow) to expose metrics JSON and simple control endpoints (start/stop, config reload).
+- Add a small REST API (cpp-httplib or Crow) to expose metrics JSON and simple control endpoints (start/stop, config reload).
 
--   Add authentication token for API access.
+- Add authentication token for API access.
 
--   Tests: integration tests for REST endpoints; security review checklist.
+- Tests: integration tests for REST endpoints; security review checklist.
 
 ### Stage 5 — Qt dashboard and alerts (6–10 days)
 
--   Implement QtDashboard: real-time charts using QChart or QCustomPlot.
+- Implement QtDashboard: real-time charts using QChart or QCustomPlot.
 
--   Visuals: per-interface bandwidth graph, active connections list, protocol pie chart, alerts panel.
+- Visuals: per-interface bandwidth graph, active connections list, protocol pie chart, alerts panel.
 
--   Alerts: threshold rules trigger toast or UI highlight; send webhook on critical events.
+- Alerts: threshold rules trigger toast or UI highlight; send webhook on critical events.
 
--   Tests: manual UI acceptance tests; unit tests for alert logic.
+- Tests: manual UI acceptance tests; unit tests for alert logic.
 
 ### Stage 6 — Hardening, CI, docs, and deployment (3–5 days)
 
--   Add GoogleTest unit suite; CI pipeline (GitHub Actions) to run tests and lint.
+- Add GoogleTest unit suite; CI pipeline (GitHub Actions) to run tests and lint.
 
--   Add sanitizer builds (ASan/UBSan) for debug CI.
+- Add sanitizer builds (ASan/UBSan) for debug CI.
 
--   Add Dockerfile for daemon mode.
+- Add Dockerfile for daemon mode.
 
--   Finalize docs, example configs,concise README.
+- Finalize docs, example configs,concise README.
 
 ## Interfaces and key class examples (API sketch)
 
--   PcapAdapter
+- PcapAdapter
 
-    -   start(interface, bpfFilter, packetCallback)
+  - start(interface, bpfFilter, packetCallback)
 
-    -   stop()
+  - stop()
 
--   Parser
+- Parser
 
-    -   parse(rawPacket) -> ParsedPacket {timestamp, iface, layers...}
+  - parse(rawPacket) -> ParsedPacket {timestamp, iface, layers...}
 
--   ConnectionTracker
+- ConnectionTracker
 
-    -   ingest(parsedPacket)
+  - ingest(parsedPacket)
 
-    -   getActiveConnections()
+  - getActiveConnections()
 
--   StatsAggregator
+- StatsAggregator
 
-    -   ingest(parsedEvent)
+  - ingest(parsedEvent)
 
-    -   getMetrics(window) -> JSON-like struct
+  - getMetrics(window) -> JSON-like struct
 
--   NetMonDaemon
+- NetMonDaemon
 
-    -   loadConfig(path)
+  - loadConfig(path)
 
-    -   run()
+  - run()
 
--   QtDashboard
+- QtDashboard
 
-    -   subscribeToMetrics(source)
+  - subscribeToMetrics(source)
 
-    -   render()
+  - render()
 
 ## Testing, security, deployment notes
 
 ### Testing
 
--   Use recorded pcap files for deterministic integration tests.
+- Use recorded pcap files for deterministic integration tests.
 
--   Mock adapters for unit tests.
+- Mock adapters for unit tests.
 
--   Add fuzz tests for parser with malformed packet samples.
+- Add fuzz tests for parser with malformed packet samples.
 
 ### Security
 
--   Run capture code with minimal privileges; drop to unprivileged user after opening capture.
+- Run capture code with minimal privileges; drop to unprivileged user after opening capture.
 
--   Sanitize config input; protect REST API with tokens.
+- Sanitize config input; protect REST API with tokens.
 
--   Careful with executing system calls; none should be exposed via API.
+- Careful with executing system calls; none should be exposed via API.
 
 ### Deployment
 
--   Provide Docker for daemon mode with CAP_NET_RAW capability.
+- Provide Docker for daemon mode with CAP_NET_RAW capability.
 
--   For desktop users, ship Qt app as separate artifact; use installer or AppImage on Linux.
+- For desktop users, ship Qt app as separate artifact; use installer or AppImage on Linux.
 
 ## Deliverables checklist
 
--   Clean README with architecture diagram in docs/design.md.
+- Clean README with architecture diagram in docs/design.md.
 
--   Buildable CMake project and sample-config.yaml.
+- Buildable CMake project and sample-config.yaml.
 
--   Unit and integration tests with coverage report.
+- Unit and integration tests with coverage report.
 
--   Dockerfile for headless daemon.
+- Dockerfile for headless daemon.
 
--   Qt dashboard binary or screenshots/gif of live UI.
+- Qt dashboard binary or screenshots/gif of live UI.
 
--   Short demo video (90–120s) showing capture -> UI visualization.
+- Short demo video (90–120s) showing capture -> UI visualization.
