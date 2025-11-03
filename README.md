@@ -37,8 +37,9 @@ net-net/
 ├─ include/
 │  └─ net-net/   (public headers for library usage)
 ├─ tests/
-│  ├─ unit/
-│  └─ integration/
+│  ├─ fixtures/
+│  ├─ integration/
+│  └─ unit/
 ├─ cmake/
 │  └─ modules/
 ├─ scripts/
