@@ -4,7 +4,7 @@
 #include <arpa/inet.h>
 
 // Helper: parse Ethernet, IPv4, IPv6, TCP, UDP, ICMP
-bool parsePacket(const, uint8_t* data, size_t len, PacketMeta meta, ParsedPacket& out) {
+bool parsePacket(const uint8_t* data, size_t len, PacketMeta meta, ParsedPacket& out) {
     if (len < 14) return false; // Ethernet header
 
     // Ethernet
@@ -17,6 +17,7 @@ bool parsePacket(const, uint8_t* data, size_t len, PacketMeta meta, ParsedPacket
         const uint8_t* iphdr = data + offset;
         out.network.src_ip = inet_ntoa(*(in_addr*)(iphdr +12));
         out.network.dst_ip = inet_ntoa(*(in_addr*)(iphdr +16));
+        out.network.protocol = iphdr[9];
         //TCP
         if (out.network.protocol == 6 && len >= offset + 20) {
             const uint8_t* tcphdr = data + offset;

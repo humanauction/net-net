@@ -34,3 +34,5 @@ struct ParsedPacket {
     const uint8_t* payload = nullptr;
     size_t payload_len = 0;
 };
+
+bool parsePacket(const uint8_t* data, size_t len, PacketMeta meta, ParsedPacket& out);

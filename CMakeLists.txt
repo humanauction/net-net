@@ -43,7 +43,7 @@ target_link_libraries(netnet
 enable_testing()
 
 find_package(GTest REQUIRED)
-
+# test runner
 add_executable(test_runner 
     tests/unit/test_pcap_adapter.cpp
 )
@@ -61,3 +61,22 @@ target_compile_definitions(test_runner
 )
 
 add_test(NAME PcapAdapterTests COMMAND test_runner)
+
+# test parser
+add_executable(test_parser
+    tests/unit/test_parser.cpp
+    src/core/parser.cpp
+)
+
+target_include_directories(test_parser
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+)
+
+target_link_libraries(test_parser
+    PRIVATE
+        GTest::GTest
+        GTest::Main
+)
+
+add_test(NAME ParserTests COMMAND test_parser)
