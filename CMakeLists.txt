@@ -104,10 +104,22 @@ add_test(NAME ConnectionTrackerIntegration COMMAND test_connection_tracker)
 
 # TODO test StatsAggregator correctly aggregates flows and maintains history
 
-add_executable()
+add_executable(test_stats_aggregator
+    tests/unit/test_stats_aggregator.cpp
+    src/core/StatsAggregator.cpp
+    src/core/parser.cpp
+    src/core/ConnectionTracker.cpp
+)
 
-target_include_directories()
+target_include_directories(
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+)
 
-target_link_libraries()
+target_link_libraries(
+    PRIVATE
+    GTest::GTest
+    GTest::Main
+)
 
-add_test(NAME COMMAND)
+add_test(NAME StatsAggregatorTests COMMAND test_stats_aggregator)
