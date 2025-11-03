@@ -1,0 +1,32 @@
+#pragma once
+#include <chrono>
+#include <unordered_map>
+#include <vector>
+#include "ConnectionTracker.h"
+
+// Aggregated stats for a time window
+struct AggregatedStats {
+    std::chrono::system_clock::time_point window_start;
+    std::unordered_map<FlowKey, FlowStats> flows;
+    // TODO Add more fields here (e.g. totals, protocol breakdown)
+};
+
+class StatsAggregator {
+public:
+// Ingest a ParsedPacket (from parser)
+    void ingest(const ParsedPacket& packet);
+
+// Advance to next window (called periodically)
+    void advanceWindow();
+
+// Get stats for current window
+    const AggregatedStats& currentStats() const;
+
+// Get stats history (rolling buffer)
+    const std::vector<AggregatedStats>& history() const;
+
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};

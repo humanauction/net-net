@@ -182,7 +182,7 @@ Implement NetMonDaemon to run headless.
 
 - Add Dockerfile for daemon mode.
 
-- Finalize docs, example configs,concise README.
+- Finalize docs, example configs, concise README.
 
 ## Interfaces and key class examples (API sketch)
 
@@ -220,7 +220,7 @@ Implement NetMonDaemon to run headless.
 
   - render()
 
-## Testing, security, deployment notes
+## Testing, security, deployment, future development, notes
 
 ### Testing
 
@@ -242,7 +242,7 @@ Implement NetMonDaemon to run headless.
 
 - Provide Docker for daemon mode with CAP_NET_RAW capability.
 
-- For desktop users, ship Qt app as separate artifact; use installer or AppImage on Linux.
+- For desktop users: ship Qt app as separate artifact; use: installer or AppImage on Linux.
 
 ## Test Fixtures
 
