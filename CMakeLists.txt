@@ -80,3 +80,24 @@ target_link_libraries(test_parser
 )
 
 add_test(NAME ParserTests COMMAND test_parser)
+
+# test connection tracker
+
+add_executable(test_connection_tracker
+    tests/integration/test_connection_tracker.cpp
+    src/core/parser.cpp
+    src/core/ConnectionTracker.cpp
+)
+
+target_include_directories(test_connection_tracker
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+)
+
+target_link_libraries(test_connection_tracker
+    PRIVATE
+    GTest::GTest
+    GTest::Main
+)
+
+add_test(NAME ConnectionTrackerIntegration COMMAND test_connection_tracker)
