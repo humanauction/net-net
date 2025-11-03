@@ -1,0 +1,51 @@
+#include <cstring>
+#include "parser.h"
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+// Helper: parse Ethernet, IPv4, IPv6, TCP, UDP, ICMP
+bool parsePacket(const, uint8_t* data, size_t len, PacketMeta meta, ParsedPacket& out) {
+    if (len < 14) return false; // Ethernet header
+
+    // Ethernet
+    uint16_t ethertype = (data[12] << 8 | data[13]);
+    size_t offset = 14;
+
+    // IPv4
+    if (ethertype == 0x0800 && len >= offset + 20) {
+        out.network.ipv6 = false;
+        const uint8_t* iphdr = data + offset;
+        out.network.src_ip = inet_ntoa(*(in_addr*)(iphdr +12));
+        out.network.dst_ip = inet_ntoa(*(in_addr*)(iphdr +16));
+        //TCP
+        if (out.network.protocol == 6 && len >= offset + 20) {
+            const uint8_t* tcphdr = data + offset;
+            out.transport.protocol = 6;
+            out.transport.src_port = ntohs(*(uint16_t*)(tcphdr));
+            out.transport.dst_port = ntohs(*(uint16_t*)(tcphdr + 2));
+            out.transport.tcp_flags = tcphdr[13];
+            offset += ((tcphdr[12] >> 4) & 0xF) * 4;
+        }
+        //UDP
+        else if (out.network.protocol == 17 && len >= offset + 8) {
+            const uint8_t* udphdr = data + offset;
+            out.transport.protocol = 17;
+            out.transport.src_port = ntohs(*(uint16_t*)(udphdr));
+            out.transport.dst_port = ntohs(*(uint16_t*)(udphdr + 2));
+            offset += 8;
+        }
+        // ICMP
+        else if () {
+
+        }
+    }
+    // IPv6
+    else if () {
+        
+        // Only basic parsing for TCP/UDP/ICMPv6 here
+    } else {
+        return false;
+    }
+
+    
+}
