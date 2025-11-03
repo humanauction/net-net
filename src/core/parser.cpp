@@ -35,17 +35,29 @@ bool parsePacket(const, uint8_t* data, size_t len, PacketMeta meta, ParsedPacket
             offset += 8;
         }
         // ICMP
-        else if () {
-
+        else if (out.network.protocol == 1 && len >= offset +4) {
+                out.transport.protocol = 1;
+                offset +=4;
         }
     }
     // IPv6
-    else if () {
-        
+    else if (ethertype == 0x86DD && len >= offset + 40) {
+        out.network.ipv6 = true;
+        const uint8_t* ip6hdr = data + offset;
+        char src[INET6_ADDRSTRLEN], dst[INET6_ADDRSTRLEN];
+        inet_ntop(AF_INET6, ip6hdr + 8, src, sizeof(src));
+        inet_ntop(AF_INET6, ip6hdr + 24, dst, sizeof(dst));
+        out.network.src_ip = src;
+        out.network.dst_ip = dst;
+        out.network.protocol = ip6hdr[6];
+        offset += 40;
         // Only basic parsing for TCP/UDP/ICMPv6 here
     } else {
         return false;
     }
 
-    
+out.meta = meta;
+out.payload = data + offset;
+out.payload_len = (offset < len) ? (len - offset) : 0;
+return true;   
 }
