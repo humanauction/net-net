@@ -131,7 +131,7 @@ See docs/design.md for full architecture.
 
 - API: startCapture(interface, callback), stopCapture(), setFilter(bpf).
 
-- Tests: unit tests mocking adapter; integration test capturing from pcap file (see: [sample.pcap](tests/fixtures/sample.pcap)). Bonus: [regenerate](#samplepcap) localhost ICMP packets.
+- Tests: unit tests mocking adapter; integration test capturing from pcap file (see: [sample.pcap](tests/fixtures/sample.pcap)). Quick Start packet script: [regenerate](#samplepcap) localhost ICMP packets.
 
 ### Stage 2 — Parser and connection tracker (6–8 days)
 
