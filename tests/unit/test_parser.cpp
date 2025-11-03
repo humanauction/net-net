@@ -2,16 +2,18 @@
 #include "parser.h"
 
 TEST(ParserTest, ParseIPv4TCP) {
-    // Synthetic Ethernet+IPv4+TCP packet (minimal, not real traffic)
     uint8_t pkt[54] = {0};
     pkt[12] = 0x08; pkt[13] = 0x00; // Ethertype IPv4
     pkt[14] = 0x45; // IPv4 header, IHL=5
     pkt[23] = 6;    // Protocol TCP
     pkt[26] = 192; pkt[27] = 168; pkt[28] = 1; pkt[29] = 1; // src_ip
     pkt[30] = 192; pkt[31] = 168; pkt[32] = 1; pkt[33] = 2; // dst_ip
+
+    // TCP header starts at offset 34
     pkt[34] = 0x00; pkt[35] = 0x50; // src_port 80
     pkt[36] = 0x01; pkt[37] = 0xbb; // dst_port 443
-    pkt[47] = 0x02; // TCP SYN
+    pkt[46] = 0x50; // Data offset (5) << 4, no flags
+    pkt[47] = 0x02; // TCP flags (SYN)
 
     PacketMeta meta;
     meta.iface = "lo0";

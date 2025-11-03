@@ -18,6 +18,8 @@ bool parsePacket(const uint8_t* data, size_t len, PacketMeta meta, ParsedPacket&
         out.network.src_ip = inet_ntoa(*(in_addr*)(iphdr +12));
         out.network.dst_ip = inet_ntoa(*(in_addr*)(iphdr +16));
         out.network.protocol = iphdr[9];
+        offset += (iphdr[0] & 0x0F) * 4;
+
         //TCP
         if (out.network.protocol == 6 && len >= offset + 20) {
             const uint8_t* tcphdr = data + offset;
