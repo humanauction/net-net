@@ -13,6 +13,7 @@ struct AggregatedStats {
 
 class StatsAggregator {
 public:
+    StatsAggregator(std::chrono::seconds window_size, size_t history_depth);
 // Ingest a ParsedPacket (from parser)
     void ingest(const ParsedPacket& packet);
 

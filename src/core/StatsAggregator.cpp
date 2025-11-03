@@ -1,4 +1,5 @@
 #include "StatsAggregator.h"
+#include "parser.h"
 
 struct StatsAggregator::Impl {
     std::chrono::seconds window_size;
