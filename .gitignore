@@ -80,10 +80,6 @@ coverage/
 # Valgrind
 *.valgrind
 
-# Core dumps
-core
-core.*
-
 # macOS
 .DS_Store
 .AppleDouble
