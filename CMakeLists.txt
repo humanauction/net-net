@@ -44,7 +44,7 @@ enable_testing()
 
 find_package(GTest REQUIRED)
 
-# test runner
+# TEST runner
 add_executable(test_runner 
     tests/unit/test_pcap_adapter.cpp
 )
@@ -63,7 +63,7 @@ target_compile_definitions(test_runner
 
 add_test(NAME PcapAdapterTests COMMAND test_runner)
 
-# test parser
+# TEST parser
 add_executable(test_parser
     tests/unit/test_parser.cpp
     src/core/parser.cpp
@@ -82,7 +82,7 @@ target_link_libraries(test_parser
 
 add_test(NAME ParserTests COMMAND test_parser)
 
-# test connection tracker
+# TEST connection tracker
 add_executable(test_connection_tracker
     tests/integration/test_connection_tracker.cpp
     src/core/parser.cpp
@@ -102,7 +102,7 @@ target_link_libraries(test_connection_tracker
 
 add_test(NAME ConnectionTrackerIntegration COMMAND test_connection_tracker)
 
-# TODO test StatsAggregator correctly aggregates flows and maintains history
+# TEST StatsAggregator correctly aggregates flows and maintains history
 
 add_executable(test_stats_aggregator
     tests/unit/test_stats_aggregator.cpp

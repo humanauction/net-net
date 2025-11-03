@@ -24,7 +24,7 @@ public:
     const AggregatedStats& currentStats() const;
 
 // Get stats history (rolling buffer)
-    const std::vector<AggregatedStats>& history() const;
+    std::vector<AggregatedStats> history() const;
 
 
 private:
