@@ -82,5 +82,7 @@
     "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
     "C_Cpp.default.defines": [
         "CMAKE_SOURCE_DIR=\"${workspaceFolder}\""
-    ]
+    ],
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.pythonProjects": []
 }

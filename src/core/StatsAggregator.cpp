@@ -81,4 +81,5 @@ void StatsAggregator::ingest(const ParsedPacket& packet) {
             stats.state = FlowStats::ESTABLISHED;
         }
     }
+
 }

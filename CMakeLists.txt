@@ -123,3 +123,25 @@ target_link_libraries(test_stats_aggregator
 )
 
 add_test(NAME StatsAggregatorTests COMMAND test_stats_aggregator)
+
+# TEST aggregated metrics: Feed packets (real or synthetic pcap file) through parser and StatsAggregator.
+
+add_executable(test_stats_aggregator_integration
+    tests/integration/test_stats_aggregator_integration.cpp
+    src/core/StatsAggregator.cpp
+    src/core/parser.cpp
+)
+
+target_include_directories(test_stats_aggregator_integration
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+)
+
+target_link_libraries(test_stats_aggregator_integration
+    PRIVATE
+        GTest::GTest
+        GTest::Main
+        pcap
+)
+
+add_test(NAME StatsAggregatorIntegration COMMAND test_stats_aggregator_integration)
