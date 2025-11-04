@@ -37,7 +37,7 @@ void StatsPersistence::saveWindow(const AggregatedStats& stats) {
     sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
     const char* insert_sql =
-        "INSERT INTO agg_stats(window_start, iface, protocol, src_ip, src_port, dst_ip, dst_port, pkts_c2s, pkts_s2c, bytes_c2s, bytes_s2c)";
+        "INSERT INTO agg_stats(window_start, iface, protocol, src_ip, src_port, dst_ip, dst_port, pkts_c2s, pkts_s2c, bytes_c2s, bytes_s2c) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(db, insert_sql, -1, &stmt, nullptr) != SQLITE_OK) {
@@ -72,6 +72,57 @@ void StatsPersistence::saveWindow(const AggregatedStats& stats) {
 }
 
 std::vector<AggregatedStats> StatsPersistence::loadHistory(size_t max_windows) {
-    // TODO: Query and deserialize stats from SQLite
-    return {};
+    std::vector<AggregatedStats> history;
+    sqlite3* db;
+    if (sqlite3_open(db_path_.c_str(), &db) != SQLITE_OK) {
+        std::cerr << "Failed to open database: " << sqlite3_errmsg(db) << std::endl;
+        return history;
+    }
+    const char* select_sql =
+        "SELECT window_start, iface, protocol, src_ip, src_port, dst_ip, dst_port, pkts_c2s, pkts_s2c, bytes_c2s, bytes_s2c "
+        "FROM agg_stats ORDER BY window_start DESC LIMIT ?;";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, select_sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare select statement: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_close(db);
+        return history;
+    }
+    sqlite3_bind_int(stmt, 1, static_cast<int>(max_windows));
+
+    std::unordered_map<int64_t, AggregatedStats> windows;
+    int rc;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        int64_t window_start = sqlite3_column_int64(stmt, 0);
+        std::string iface = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        int protocol = sqlite3_column_int(stmt, 2);
+        std::string src_ip = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        int src_port = sqlite3_column_int(stmt, 4);
+        std::string dst_ip = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+        int dst_port = sqlite3_column_int(stmt, 6);
+        int pkts_c2s = sqlite3_column_int(stmt, 7);
+        int pkts_s2c = sqlite3_column_int(stmt, 8);
+        int bytes_c2s = sqlite3_column_int(stmt, 9);
+        int bytes_s2c = sqlite3_column_int(stmt, 10);
+
+        FlowKey key{iface, protocol, src_ip, src_port, dst_ip, dst_port};
+        FlowStats fs;
+        fs.pkts_c2s = pkts_c2s;
+        fs.pkts_s2c = pkts_s2c;
+        fs.bytes_c2s = bytes_c2s;
+        fs.bytes_s2c = bytes_s2c;
+
+        auto& agg = windows[window_start];
+        agg.window_start = std::chrono::system_clock::time_point(std::chrono::seconds(window_start));
+        agg.flows[key] = fs;
+    }
+    if (rc != SQLITE_DONE) {
+        std::cerr << "Error while reading rows: " << sqlite3_errmsg(db) << std::endl;
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+
+    for (auto& kv : windows) {
+        history.push_back(std::move(kv.second));
+    }
+    return history;
 }
