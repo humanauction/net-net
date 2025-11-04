@@ -111,12 +111,12 @@ add_executable(test_stats_aggregator
     src/core/ConnectionTracker.cpp
 )
 
-target_include_directories(
+target_include_directories(test_stats_aggregator
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
 )
 
-target_link_libraries(
+target_link_libraries(test_stats_aggregator
     PRIVATE
     GTest::GTest
     GTest::Main

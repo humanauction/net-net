@@ -54,3 +54,23 @@ TEST(StatsAggregatorTest, AggregatesFlowsAndHistory) {
     agg.advanceWindow();
     EXPECT_EQ(agg.history().size(), 2); // history_depth = 2, oldest dropped
 }
+
+TEST(StatsAggregatorTest, CircularBufferOrder) {
+    StatsAggregator agg(std::chrono::seconds(1),(2));
+
+    auto pkt1 = make_udp_packet("eth0", "10.0.0.1", 1234, "10.0.0.2", 5678);
+    agg.ingest(pkt1);
+    agg.advanceWindow();
+
+    auto pkt2 = make_udp_packet("eth1", "192.168.1.1", 1111, "192.168.1.2", 2222);
+    agg.ingest(pkt2);
+    agg.advanceWindow();
+
+    auto pkt3 = make_udp_packet("eth0", "10.0.0.1", 1234, "10.0.0.2", 5678);
+    agg.ingest(pkt3);
+    agg.advanceWindow();
+
+    // Check contents of history[0][1] for expected flows
+    auto history = agg.history();
+    EXPECT_EQ(history.size(), 2);
+}

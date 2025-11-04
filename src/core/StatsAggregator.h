@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 #include "ConnectionTracker.h"
+#include "parser.h"
 
 // Aggregated stats for a time window
 struct AggregatedStats {
@@ -16,18 +17,22 @@ public:
     StatsAggregator(std::chrono::seconds window_size, size_t history_depth);
 // Ingest a ParsedPacket (from parser)
     void ingest(const ParsedPacket& packet);
-
 // Advance to next window (called periodically)
     void advanceWindow();
-
 // Get stats for current window
     const AggregatedStats& currentStats() const;
-
 // Get stats history (rolling buffer)
     std::vector<AggregatedStats> history() const;
 
 
 private:
-    struct Impl;
+    struct Impl {
+        size_t count = 0;
+        std::chrono::seconds window_size;
+        size_t history_depth;
+        std::vector<AggregatedStats> stats_history;
+        size_t head = 0;
+        AggregatedStats current;
+    };
     std::unique_ptr<Impl> impl_;
 };
