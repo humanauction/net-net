@@ -38,8 +38,15 @@ net-net/
 │  └─ net-net/   (public headers for library usage)
 ├─ tests/
 │  ├─ fixtures/
+│  │  ├─ icmp_sample.pcap   
+│  │  └─ tcp_sample.pcap
 │  ├─ integration/
+│  │  ├─ test_connection_tracker.cpp
+│  │  └─ test_stats_aggregator_integration.cpp
 │  └─ unit/
+│     ├─ test_parser.cpp
+│     ├─ test_pcap_adapter.cpp
+│     └─ test_stats_aggregator.cpp
 ├─ cmake/
 │  └─ modules/
 ├─ scripts/
@@ -54,8 +61,14 @@ net-net/
 │  └─ perf.md
 ├─ examples/
 │  └─ sample-config.yaml
+├─ .vscode/
+│  └─ settings.json
+├─ .venv-netnet/
+│  └─ ... (virtual environment files)
 ├─ .clang-format
+├─ make_pcap.py
 ├─ CMakeLists.txt
+├─ .gitignore
 └─ README.md
 ```
 
@@ -132,7 +145,7 @@ See docs/design.md for full architecture.
 
 - API: startCapture(interface, callback), stopCapture(), setFilter(bpf).
 
-- Tests: unit tests mocking adapter; integration test capturing from pcap file (see: [sample.pcap](tests/fixtures/sample.pcap)). Quick Start packet script: [regenerate](#samplepcap) localhost ICMP packets.
+- Tests: unit tests mocking adapter; integration test capturing from pcap file (see: [sample.pcap](tests/fixtures/sample.pcap)). Quick Start packet scripts: [regenerate](#samplepcap) localhost ICMP packets.
 
 ### Stage 2 — Parser and connection tracker (6–8 days)
 
@@ -248,12 +261,34 @@ Implement NetMonDaemon to run headless.
 
 ### sample.pcap
 
-10 ICMP echo request/reply packets captured from localhost.
+#### 10 ICMP echo request/reply packets captured from localhost
 
 **To regenerate:**
 
 ```bash
-sudo tcpdump -i lo0 -w sample.pcap &
+sudo tcpdump -i lo0 -w icmp_sample.pcap &
 ping -c 5 127.0.0.1
 sudo killall tcpdump
+```
+
+**To inspect:**
+
+```bash
+tcpdump -nnr icmp_sample.pcap
+tcpdump -xx -r icmp_sample.pcap
+```
+
+#### 10 TCP SYN packets from 10.0.0.1:1234 to 10.0.0.2:80 (synthetic, for integration tests)
+
+**To regenerate:**
+
+```bash
+sudo tcpdump -i lo0 tcp and host 10.0.0.1 and port 80 -c 10 -w tests/fixtures/tcp_sample.pcap
+```
+
+**To inspect:**
+
+```bash
+tcpdump -nnr tests/fixtures/tcp_sample.pcap
+tcpdump -xx -r tests/fixtures/tcp_sample.pcap
 ```

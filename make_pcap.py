@@ -1,4 +1,6 @@
-from scapy.all import Ether, IP, TCP, wrpcap
+from scapy.layers.l2 import Ether
+from scapy.all import wrpcap
+from scapy.layers.inet import IP, TCP
 
 packets = []
 for i in range(10):
@@ -9,4 +11,4 @@ for i in range(10):
     )
     packets.append(pkt)
 
-wrpcap("tests/fixtures/sample.pcap", packets)
+wrpcap("tests/fixtures/tcp_sample.pcap", packets)

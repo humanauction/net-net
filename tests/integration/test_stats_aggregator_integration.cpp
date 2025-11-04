@@ -45,6 +45,6 @@ TEST(StatsAggregatorIntegrationTest, AggregatesPcapReplay) {
 
     auto it = stats.flows.find(key);
     ASSERT_TRUE(it != stats.flows.end());
-    EXPECT_EQ(it->second.pkts_c2s, 10);      // Adjust to match your pcap
-    EXPECT_EQ(it->second.bytes_c2s, 10 * 54); // Adjust to match your pcap
+    EXPECT_EQ(it->second.pkts_c2s, 10);      // 10 pkts. Adjust to match pcap
+    EXPECT_EQ(it->second.bytes_c2s, 10 * 54); // 10 * 54 bytes. Adjust to match pcap
 }
