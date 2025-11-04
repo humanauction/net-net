@@ -96,11 +96,13 @@ CMake 3.16+.
 
 libpcap development headers (or root for raw sockets).
 
-Qt 6 (optional, for dashboard).
-
 GoogleTest for unit tests.
 
+Qt 6 (optional, for dashboard).
+
 Docker (optional for CI).
+
+Python (optional for SYN packet generation script).
 
 ## Quick start
 
@@ -233,7 +235,7 @@ Implement NetMonDaemon to run headless.
 
   - render()
 
-## Testing, security, deployment, future development, notes
+## Testing, security, deployment, future development, notes (mostly to self)
 
 ### Testing
 
