@@ -34,6 +34,7 @@ net-net/
 │  │  └─ QmlViews/...
 │  ├─ daemon/
 │  │  ├─ NetMonDaemon.cpp
+│  │  ├─ NetMonDaemon.h
 │  │  └─ ConfigLoader.cpp
 │  └─ main.cpp
 ├─ include/
