@@ -11,13 +11,28 @@ AS A
 I WANT
 SO THAT
 
+---
+
+## Acceptance criteria
 
 Additional acceptance criteria:
 
-[ ] 
+[ ]
 
-[ ] 
+[ ]
 
-[ ] 
+[ ]
 
-Tasks:
+[ ]
+
+---
+
+## Tasks
+
+[ ]
+
+[ ]
+
+[ ]
+
+[ ]

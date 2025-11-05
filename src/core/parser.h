@@ -29,6 +29,7 @@ struct TransportInfo {
 // Parsed packet structure
 struct ParsedPacket {
     PacketMeta meta;
+    DataLinkInfo datalink;
     NetworkInfo network;
     TransportInfo transport;
     const uint8_t* payload = nullptr;
