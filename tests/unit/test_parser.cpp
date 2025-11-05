@@ -3,6 +3,9 @@
 
 TEST(ParserTest, ParseIPv4TCP) {
     uint8_t pkt[54] = {0};
+    // Set MAC addresses
+    pkt[0] = 0xaa; pkt[1] = 0xbb; pkt[2] = 0xcc; pkt[3] = 0xdd; pkt[4] = 0xee; pkt[5] = 0xff; // dst_mac
+    pkt[6] = 0x11; pkt[7] = 0x22; pkt[8] = 0x33; pkt[9] = 0x44; pkt[10] = 0x55; pkt[11] = 0x66; // src_mac
     pkt[12] = 0x08; pkt[13] = 0x00; // Ethertype IPv4
     pkt[14] = 0x45; // IPv4 header, IHL=5
     pkt[23] = 6;    // Protocol TCP
@@ -22,6 +25,9 @@ TEST(ParserTest, ParseIPv4TCP) {
 
     ParsedPacket out;
     ASSERT_TRUE(parsePacket(pkt, 54, meta, out));
+    EXPECT_EQ(out.datalink.src_mac, "11:22:33:44:55:66");
+    EXPECT_EQ(out.datalink.dst_mac, "aa:bb:cc:dd:ee:ff");
+    EXPECT_EQ(out.datalink.ethertype, 0x0800);
     EXPECT_EQ(out.network.src_ip, "192.168.1.1");
     EXPECT_EQ(out.network.dst_ip, "192.168.1.2");
     EXPECT_EQ(out.transport.src_port, 80);

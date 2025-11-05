@@ -4,11 +4,19 @@
 #include <arpa/inet.h>
 
 // Helper: parse Ethernet, IPv4, IPv6, TCP, UDP, ICMP
-bool parsePacket(const uint8_t* data, size_t len, PacketMeta meta, ParsedPacket& out) {
+bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, ParsedPacket& out) {
     if (len < 14) return false; // Ethernet header
 
     // Ethernet
     uint16_t ethertype = (data[12] << 8 | data[13]);
+    char src_mac[18], dst_mac[18]; // <-- Only declare once, at the top of the function
+    snprintf(src_mac, sizeof(src_mac), "%02x:%02x:%02x:%02x:%02x:%02x",
+             data[6], data[7], data[8], data[9], data[10], data[11]);
+    snprintf(dst_mac, sizeof(dst_mac), "%02x:%02x:%02x:%02x:%02x:%02x",
+             data[0], data[1], data[2], data[3], data[4], data[5]);
+    out.datalink.src_mac = src_mac;
+    out.datalink.dst_mac = dst_mac;
+    out.datalink.ethertype = ethertype;
     size_t offset = 14;
 
     // IPv4
@@ -59,8 +67,8 @@ bool parsePacket(const uint8_t* data, size_t len, PacketMeta meta, ParsedPacket&
         return false;
     }
 
-out.meta = meta;
-out.payload = data + offset;
-out.payload_len = (offset < len) ? (len - offset) : 0;
-return true;   
+    out.meta = meta;
+    out.payload = data + offset;
+    out.payload_len = (offset < len) ? (len - offset) : 0;
+    return true;   
 }

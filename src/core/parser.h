@@ -1,7 +1,4 @@
 #pragma once
-#include <string>
-#include <cstdint>
-#include <chrono>
 #include "PacketMeta.h"
 
 // Layer 2 (data link) info
@@ -36,14 +33,4 @@ struct ParsedPacket {
     size_t payload_len = 0;
 };
 
-bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, ParsedPacket& out) {
-    // TODO: Implement actual parsing logic here.
-    // For now, assume parsing always successful if data is not null and len > 0.
-    bool success = (data != nullptr && len > 0);
-    if (success) {
-        out.meta = meta;
-        // TO DO: out.network, out.transport, etc. here.
-        return true;
-    }
-    return false;   
-}
+bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, ParsedPacket& out);
