@@ -20,8 +20,8 @@ interface:
 
 # Offline Capture Mode (optional)
 # Uncomment to read from pcap file instead of live capture
-# offline:
-#   file: "tests/fixtures/sample.pcap"
+offline:
+  file: "tests/fixtures/icmp_sample.pcap"
 
 # BPF Filter (Berkeley Packet Filter)
 # Syntax: https://www.tcpdump.org/manpages/pcap-filter.7.html
@@ -64,25 +64,25 @@ stats:
 
 # Persistence (optional)
 # database:
-#   # SQLite file path for historical data
-#   path: "netnet.db"
-#   
-#   # Retention period in days
-#   retention_days: 7
+  # SQLite file path for historical data
+  path: "netnet.db"
+  
+  # Retention period in days
+  retention_days: 7
 
-# API/Daemon Configuration
-# api:
-#   # Enable REST API
-#   enabled: true
-#   
-#   # Listen address
-#   bind: "127.0.0.1"
-#   
-#   # Port
-#   port: 8080
-#   
-#   # Authentication token (optional)
-#   # token: "your-secret-token-here"
+API/Daemon Configuration
+api:
+  # Enable REST API
+  enabled: true
+  
+  # Listen address
+  bind: "127.0.0.1"
+  
+  # Port
+  port: 8080
+  
+  # Authentication token (optional)
+  token: "your-secret-token-here"
 
 # Logging
 logging:
@@ -114,5 +114,5 @@ performance:
   buffer_size: 2097152  # 2MB
   
   # Worker thread count for packet processing
-  # 0 = auto-detect CPU count
+  0 = auto-detect CPU count
   worker_threads: 0
