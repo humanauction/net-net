@@ -14,6 +14,7 @@ net-net/
 │  ├─ core/
 │  │  ├─ PacketCapture.cpp
 │  │  ├─ PacketCapture.h
+│  │  ├─ PacketMeta.h
 │  │  ├─ Parser.cpp
 │  │  ├─ Parser.h
 │  │  ├─ ConnectionTracker.cpp

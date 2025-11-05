@@ -12,6 +12,7 @@ public:
     void run();
     void stop();
 private:
+    std::atomic<bool> running_{false};
     std::string config_path_;
     std::unique_ptr<PcapAdapter> pcap_;
     std::unique_ptr<StatsAggregator> aggregator_;

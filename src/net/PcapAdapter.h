@@ -13,7 +13,7 @@ struct PacketMeta {
     uint32_t orig_len;
 };
 
-using PacketCallback = std::function<void(const PacketMeta& meta, const uint8_t* data, size_t)>;
+using PacketCallback = std::function<void(const PacketMeta&, const uint8_t*, size_t)>;
 
 class PcapAdapter {
 public:
