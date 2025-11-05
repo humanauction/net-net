@@ -131,7 +131,7 @@ See DEVELOPMENT.mds, below.
 Development broken down into stages (milestones)
 Work divided into five stages. Each stage lists deliverables and focused tests.
 
-### Stage 0 — Planning and design (2–3 days)
+### Stage 0 — Planning and design (Estimate: 2–3 days. Actual: 10 days)
 
 See docs/design.md for full architecture.
 
@@ -143,7 +143,7 @@ See docs/design.md for full architecture.
 
 - Tests: design review checklist.
 
-### Stage 1 — Core capture and adapter layer (4–6 days)
+### Stage 1 — Core capture and adapter layer (Estimate: 4–6 days. Actual: 5 days)
 
 - Implement PcapAdapter (wrapper around libpcap) with clean, testable interface.
 
@@ -153,7 +153,7 @@ See docs/design.md for full architecture.
 
 - Tests: unit tests mocking adapter; integration test capturing from pcap file (see: [sample.pcap](tests/fixtures/sample.pcap)). Quick Start packet scripts: [regenerate](#samplepcap) localhost ICMP packets.
 
-### Stage 2 — Parser and connection tracker (6–8 days)
+### Stage 2 — Parser and connection tracker (Estimate: 6–8 days; Actual: 4 days)
 
 - Implement Parser for Ethernet -> IPv4/IPv6 -> Transport (TCP/UDP/ICMP).
 
@@ -163,19 +163,19 @@ See docs/design.md for full architecture.
 
 - Tests: unit tests for parsing sample packets; synthetic pcap files to validate flow assembly.
 
-### Stage 3 — Stats aggregation and persistence (4–6 days)
+### Stage 3 — Stats aggregation and persistence (Estimate: 4–6 days; Actual: 5 days)
 
 - Implement StatsAggregator which consumes parsed events and outputs rolling-window metrics.
 
 - Support configurable windows: 1s, 10s, 60s.
 
-- Provide an in-memory ring buffer and optional disk-backed persistence (SQLite) for historical queries.
+- Provide an in-memory ring buffer and disk-backed persistence (SQLite) for historical queries.
 
-- Tests: unit tests for aggregation math; integration test verifying outputs over recorded pcap simulation.
+- Tests: unit tests for aggregation maths; integration test verifying outputs over recorded pcap simulation.
 
-### Stage 4 — CLI daemon + REST API (optional) (5–7 days)
+### Stage 4 — CLI daemon + REST API (Estimate:5–7 days; Actual: In Progress)
 
-Implement NetMonDaemon to run headless.
+- Implement NetMonDaemon to run headless.
 
 - Add a small REST API (cpp-httplib or Crow) to expose metrics JSON and simple control endpoints (start/stop, config reload).
 
@@ -183,17 +183,17 @@ Implement NetMonDaemon to run headless.
 
 - Tests: integration tests for REST endpoints; security review checklist.
 
-### Stage 5 — Qt dashboard and alerts (6–10 days)
+### Stage 5 — Qt dashboard and alerts (Estimate: 6–10 days; Actual: Pending)
 
 - Implement QtDashboard: real-time charts using QChart or QCustomPlot.
 
 - Visuals: per-interface bandwidth graph, active connections list, protocol pie chart, alerts panel.
 
-- Alerts: threshold rules trigger toast or UI highlight; send webhook on critical events.
+- Alerts: threshold rules trigger toast or UI highlight and send webhook on critical events.
 
 - Tests: manual UI acceptance tests; unit tests for alert logic.
 
-### Stage 6 — Hardening, CI, docs, and deployment (3–5 days)
+### Stage 6 — Hardening, CI, docs and deployment (Estimate: 3–5 days; Actual: Pending)
 
 - Add GoogleTest unit suite; CI pipeline (GitHub Actions) to run tests and lint.
 

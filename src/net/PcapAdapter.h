@@ -4,14 +4,7 @@
 #include <string>
 #include <chrono>
 #include <memory>
-
-
-struct PacketMeta {
-    std::chrono::system_clock::time_point timestamp;
-    std::string iface;
-    uint32_t cap_len;
-    uint32_t orig_len;
-};
+#include "core/PacketMeta.h"
 
 using PacketCallback = std::function<void(const PacketMeta&, const uint8_t*, size_t)>;
 
