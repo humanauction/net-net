@@ -123,7 +123,7 @@ void NetMonDaemon::run()
                 return;
             }
             try {
-                std::unique_lock<std::shared_mutex> lock(reload_mutex); // Protect reload
+                std::lock_guard<std::shared_mutex> lock(reload_mutex);
                 YAML::Node config = YAML::LoadFile(config_path_);
                 // Re-load token
                 if (!config["api"] || !config["api"]["token"]) throw std::runtime_error("Missing api.token");
@@ -148,8 +148,13 @@ void NetMonDaemon::run()
                 std::string db_path = config["database"]["path"].as<std::string>();
                 persistence_ = std::make_unique<StatsPersistence>(db_path);
 
-                res.set_content("{\"status\":\"reloaded\"}", "application/json"); // Updated response
+                std::cout << "[INFO] Config reloaded successfully at " 
+                          << std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) 
+                          << std::endl;
+
+                res.set_content("{\"status\":\"reloaded\"}", "application/json");
             } catch (const std::exception& ex) {
+                std::cerr << "[ERROR] Reload failed: " << ex.what() << std::endl;
                 res.status = 500;
                 res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
             }
