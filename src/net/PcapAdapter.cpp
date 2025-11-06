@@ -3,6 +3,7 @@
 #include <thread>
 #include <stdexcept>
 #include <mutex>
+#include <shared_mutex>
 
 struct PcapAdapter::Impl {
     Options opts;
@@ -11,7 +12,7 @@ struct PcapAdapter::Impl {
     PacketCallback callback;
     std::atomic<bool> running{false};
     std::string source_name;
-    std::mutex filter_mtx;
+    std::shared_mutex filter_mtx;
 };
 
 void pcap_bridge(u_char* user, const struct pcap_pkthdr* hdr, const u_char* data) {
@@ -122,7 +123,7 @@ void PcapAdapter::stopCapture() {
 }
 
 void PcapAdapter::setFilter(const std::string& bpf) {
-    std::lock_guard<std::mutex> lock(impl_->filter_mtx);
+    std::shared_lock<std::shared_mutex> lock(impl_->filter_mtx);
     if (!impl_->handle) {
         throw std::runtime_error("pcap handle not open");
     }

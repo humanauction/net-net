@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "PcapAdapter.h"
+#include "../../src/net/PcapAdapter.h"
 #include <thread>
 #include <chrono>
 

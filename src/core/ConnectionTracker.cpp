@@ -1,6 +1,7 @@
 #include "ConnectionTracker.h"
 #include "parser.h"
 #include <mutex>
+#include <shared_mutex>
 
 bool FlowKey::operator==(const FlowKey& other) const {
     return iface == other.iface &&
@@ -23,7 +24,7 @@ size_t std::hash<FlowKey>::operator()(const FlowKey& k) const {
 
 struct ConnectionTracker::Impl {
     std::unordered_map<FlowKey, FlowStats> flows;
-    mutable std::mutex mutex;
+    mutable std::shared_mutex mutex;
 };
 
 ConnectionTracker::ConnectionTracker() : impl_(std::make_unique<Impl>()) {}
@@ -31,7 +32,7 @@ ConnectionTracker::ConnectionTracker() : impl_(std::make_unique<Impl>()) {}
 ConnectionTracker::~ConnectionTracker() = default;
 
 void ConnectionTracker::ingest(const ParsedPacket& packet) {
-    std::lock_guard<std::mutex> lock(impl_->mutex);
+    std::shared_lock<std::shared_mutex> lock(impl_->mutex);
 
     // Build FlowKey from ParsedPacket
     FlowKey key;
@@ -85,12 +86,12 @@ void ConnectionTracker::ingest(const ParsedPacket& packet) {
 }
 
 std::unordered_map<FlowKey, FlowStats> ConnectionTracker::getActiveConnections() const {
-    std::lock_guard<std::mutex> lock(impl_->mutex);
+    std::shared_lock<std::shared_mutex> lock(impl_->mutex);
     return impl_->flows;
 }
 
 void ConnectionTracker::cleanupIdle(std::chrono::seconds timeout) {
-    std::lock_guard<std::mutex> lock(impl_->mutex);
+    std::unique_lock<std::shared_mutex> lock(impl_->mutex);
     auto now = std::chrono::system_clock::now();
 
     for (auto it = impl_->flows.begin(); it != impl_->flows.end();) {

@@ -79,7 +79,11 @@
         "variant": "cpp",
         "complex": "cpp",
         "list": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "iomanip": "cpp",
+        "regex": "cpp",
+        "unordered_set": "cpp",
+        "thread": "cpp"
     },
     "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
     "C_Cpp.default.defines": [

@@ -15,6 +15,11 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     if (!config["interface"] || !config["interface"]["name"]) {
         throw std::runtime_error("Missing required 'interface.name' in config");
     }
+    if (!config["api"] || !config["api"]["token"]) {
+        throw std::runtime_error("Config missing 'api.token' required");
+    }
+    api_token_ = config["api"]["token"].as<std::string>();
+    
     std::string iface_or_file = config["interface"]["name"].as<std::string>();
     std::string bpf_filter = config["interface"] && config["interface"]["bpf_filter"] ? config["interface"]["bpf_filter"].as<std::string>() : "";
     bool promiscuous = config["interface"] && config["interface"]["promiscuous"] ? config["interface"]["promiscuous"].as<bool>() : true;
@@ -51,8 +56,14 @@ void NetMonDaemon::run()
 
     // Start REST API server
     api_thread_ = std::thread([this]() {
-        svr_.Get("/metrics", [this](const httplib::Request&, httplib::Response& res) {
+        svr_.Get("/metrics", [this](const httplib::Request& req, httplib::Response& res) {
             // TODO: Serialize stats to JSON and set res.body
+            if (!isAuthorized(req)) {
+                logAuthFailure(req);
+                res.status = 401;
+                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+                return;
+            }
             auto stats = aggregator_->currentStats();
             std::ostringstream oss;
             oss << "{";
@@ -82,19 +93,66 @@ void NetMonDaemon::run()
             res.set_content(oss.str(), "application/json");
         });
 
-        svr_.Post("/control/start", [this](const httplib::Request&, httplib::Response& res) {
+        svr_.Post("/control/start", [this](const httplib::Request& req, httplib::Response& res) {
+            if (!isAuthorized(req)) {
+                logAuthFailure(req);
+                res.status = 401;
+                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+                return;
+            }
             running_ = true;
             res.set_content("{\"status\":\"started\"}", "application/json");
         });
 
-        svr_.Post("/control/stop", [this](const httplib::Request&, httplib::Response& res) {
+        svr_.Post("/control/stop", [this](const httplib::Request& req, httplib::Response& res) {
+            if (!isAuthorized(req)) {
+                logAuthFailure(req);
+                res.status = 401;
+                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+                return;
+            }
             running_ = false;
             res.set_content("{\"status\":\"stopped\"}", "application/json");
         });
 
-        svr_.Post("/control/reload", [this](const httplib::Request&, httplib::Response& res) {
-            // TODO: Implement config reload logic
-            res.set_content("{\"status\":\"reload not implemented\"}", "application/json");
+        svr_.Post("/control/reload", [this](const httplib::Request& req, httplib::Response& res) {
+            if (!isAuthorized(req)) {
+                logAuthFailure(req);
+                res.status = 401;
+                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+                return;
+            }
+            try {
+                std::unique_lock<std::shared_mutex> lock(reload_mutex); // Protect reload
+                YAML::Node config = YAML::LoadFile(config_path_);
+                // Re-load token
+                if (!config["api"] || !config["api"]["token"]) throw std::runtime_error("Missing api.token");
+                api_token_ = config["api"]["token"].as<std::string>();
+
+                // Re-init PcapAdapter
+                std::string iface_or_file = config["interface"]["name"].as<std::string>();
+                std::string bpf_filter = config["interface"]["bpf_filter"] ? config["interface"]["bpf_filter"].as<std::string>() : "";
+                bool promiscuous = config["interface"]["promiscuous"] ? config["interface"]["promiscuous"].as<bool>() : true;
+                int snaplen = config["interface"]["snaplen"].as<int>();
+                int timeout = config["interface"]["timeout_ms"].as<int>();
+                bool read_offline = config["offline"] && config["offline"]["file"];
+                std::string offline_file = read_offline ? config["offline"]["file"].as<std::string>() : "";
+                pcap_ = std::make_unique<PcapAdapter>(iface_or_file, bpf_filter, promiscuous, snaplen, timeout, read_offline);
+
+                // Re-init StatsAggregator
+                int window_size = config["stats"]["window_size"].as<int>();
+                int history_depth = config["stats"]["history_depth"].as<int>();
+                aggregator_ = std::make_unique<StatsAggregator>(std::chrono::seconds(window_size), history_depth);
+
+                // Re-init StatsPersistence
+                std::string db_path = config["database"]["path"].as<std::string>();
+                persistence_ = std::make_unique<StatsPersistence>(db_path);
+
+                res.set_content("{\"status\":\"reloaded\"}", "application/json"); // Updated response
+            } catch (const std::exception& ex) {
+                res.status = 500;
+                res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
+            }
         });
 
         svr_.listen("0.0.0.0", 8080);
@@ -130,4 +188,24 @@ void NetMonDaemon::stop()
     // (cpp-httplib stops when svr.stop() is called)
     svr_.stop();
     if (api_thread_.joinable()) api_thread_.join();
+}
+
+bool NetMonDaemon::isAuthorized(const httplib::Request& req) const {
+    auto auth = req.get_header_value("Authorization");
+    std::string prefix = "Bearer ";
+    if (auth.rfind(prefix, 0) == 0 && auth.substr(prefix.size()) == api_token_) {
+        return true;
+    }
+    if (req.has_param("token") && req.get_param_value("token") == api_token_) {
+        return true;
+    }
+    return false;
+}
+
+void NetMonDaemon::logAuthFailure(const httplib::Request& req) const {
+    std::cerr << "[AUTH FAIL] " << req.method << " " << req.path;
+    auto auth = req.get_header_value("Authorization");
+    if (!auth.empty()) std::cerr << " (Authorization header present)";
+    if (req.has_param("token")) std::cerr << " (token param present)";
+    std::cerr << std::endl;
 }

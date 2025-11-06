@@ -18,7 +18,7 @@ add_library(netnet-core
 
 target_include_directories(netnet-core
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/net
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
     PRIVATE
         ${PCAP_INCLUDE_DIRS}
 )
@@ -134,7 +134,7 @@ add_executable(test_stats_aggregator_integration
 
 target_include_directories(test_stats_aggregator_integration
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/net
 )
 
 target_link_libraries(test_stats_aggregator_integration
