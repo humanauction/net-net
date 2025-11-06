@@ -4,6 +4,7 @@
 #include <thread>
 #include <chrono>
 #include "httplib.h" // For HTTP server (if needed)
+#include <sstream>
 
 
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
@@ -45,7 +46,6 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
 
 void NetMonDaemon::run()
 {
-    // TODO: Main loop, capture packets, aggregate stats, persist windows
     running_ = true;
     std::cout << "NetMonDaemon is running..." << std::endl;
 
@@ -53,10 +53,51 @@ void NetMonDaemon::run()
     api_thread_ = std::thread([this]() {
         svr_.Get("/metrics", [this](const httplib::Request&, httplib::Response& res) {
             // TODO: Serialize stats to JSON and set res.body
-            res.set_content("{}", "application/json");
+            auto stats = aggregator_->currentStats();
+            std::ostringstream oss;
+            oss << "{";
+            oss << "\"window_start\":" <<std::chrono::duration_cast<std::chrono::seconds>(stats.window_start.time_since_epoch()).count() << ",";
+            oss << "\"flows\":[";
+            bool first = true;
+            for (const auto& kv : stats.flows) {
+                if (!first) oss << ",";
+                first = false;
+                const auto& key = kv.first;
+                const auto& val = kv.second;
+                oss << "{";
+                oss << "\"iface\":\"" << key.iface << "\",";
+                oss << "\"protocol\":" << key.protocol << ",";
+                oss << "\"src_ip\":\"" << key.src_ip << "\",";
+                oss << "\"src_port\":" << key.src_port << ",";
+                oss << "\"dst_ip\":\"" << key.dst_ip << "\",";
+                oss << "\"dst_port\":" << key.dst_port << ",";
+                oss << "\"bytes_c2s\":" << val.bytes_c2s << ",";
+                oss << "\"pkts_c2s\":" << val.pkts_c2s << ",";
+                oss << "\"bytes_s2c\":" << val.bytes_s2c << ",";
+                oss << "\"pkts_s2c\":" << val.pkts_s2c;
+                oss << "}";
+            }
+            oss << "]";
+            oss << "}";
+            res.set_content(oss.str(), "application/json");
         });
-        svr_.listen("0.0.0.0", 8080); // Listen on port 8080
-        // TODO: Add endpoints here 
+
+        svr_.Post("/control/start", [this](const httplib::Request&, httplib::Response& res) {
+            running_ = true;
+            res.set_content("{\"status\":\"started\"}", "application/json");
+        });
+
+        svr_.Post("/control/stop", [this](const httplib::Request&, httplib::Response& res) {
+            running_ = false;
+            res.set_content("{\"status\":\"stopped\"}", "application/json");
+        });
+
+        svr_.Post("/control/reload", [this](const httplib::Request&, httplib::Response& res) {
+            // TODO: Implement config reload logic
+            res.set_content("{\"status\":\"reload not implemented\"}", "application/json");
+        });
+
+        svr_.listen("0.0.0.0", 8080);
     });
 
     // Start packet capture with a callback that feeds packets to StatsAggregator
@@ -76,6 +117,7 @@ void NetMonDaemon::run()
         // Sleep (or break) logic here
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
+
     pcap_->stopCapture();
 }
 
