@@ -1,6 +1,6 @@
 import requests
-TOKEN = "your_api_token_here"
-BASE = "http://localhost:8000"
+TOKEN = "af9ff608895efc542d80b608a24c13d2"
+BASE = "http://localhost:5000"
 
 
 def test_metrics():

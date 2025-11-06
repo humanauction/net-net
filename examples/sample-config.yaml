@@ -81,8 +81,9 @@ api:
   # Port
   port: 8080
   
-  # Authentication token (optional)
-  token: "your-secret-token-here"
+  # Authentication token (testing only, use a secure token in production)
+  # token: "your-secret-token-here"
+  token: "af9ff608895efc542d80b608a24c13d2"
 
 # Logging
 logging:
