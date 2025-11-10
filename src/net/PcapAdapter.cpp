@@ -18,28 +18,26 @@ struct PcapAdapter::Impl {
 void pcap_bridge(u_char* user, const struct pcap_pkthdr* hdr, const u_char* data) {
     auto* impl = reinterpret_cast<PcapAdapter::Impl*>(user);
     if (!impl->callback) return;
-    
+
     PacketMeta meta;
     meta.timestamp = std::chrono::system_clock::from_time_t(hdr->ts.tv_sec);
     meta.timestamp += std::chrono::microseconds(hdr->ts.tv_usec);
     meta.cap_len = hdr->caplen;
     meta.orig_len = hdr->len;
     meta.iface = impl->source_name;
-    
+
     impl->callback(meta, data, hdr->caplen);
 }
 
-PcapAdapter::PcapAdapter(const Options& opts) 
+PcapAdapter::PcapAdapter(const Options& opts)
     : impl_(std::make_unique<Impl>()) {
-        // Validate options
+    // Validate options
     if (opts.iface_or_file.empty()) {
         throw std::invalid_argument("Interface or file path cannot be empty");
     }
-    
     if (opts.snaplen <= 0 || opts.snaplen > 65535) {
         throw std::invalid_argument("Snaplen must be between 1 and 65535");
     }
-    
     if (opts.timeout_ms < 0) {
         throw std::invalid_argument("Timeout cannot be negative");
     }
@@ -96,12 +94,12 @@ void PcapAdapter::startCapture(PacketCallback cb) {
         }
         pcap_freecode(&prog);
     }
-    
+
     impl_->running.store(true);
     impl_->worker = std::thread([this]() {
         int ret = pcap_loop(impl_->handle, 0, ::pcap_bridge, reinterpret_cast<u_char*>(impl_.get()));
         impl_->running.store(false);
-        (void)ret; // suppresses unused variable warning
+        (void)ret; // suppress unused variable warning
     });
 }
 
@@ -112,13 +110,13 @@ void PcapAdapter::stopCapture() {
         }
         return;
     }
-    
+
     pcap_breakloop(impl_->handle);
-    
+
     if (impl_->worker.joinable()) {
         impl_->worker.join();
     }
-    
+
     impl_->running.store(false);
 }
 
@@ -127,17 +125,17 @@ void PcapAdapter::setFilter(const std::string& bpf) {
     if (!impl_->handle) {
         throw std::runtime_error("pcap handle not open");
     }
-    
+
     struct bpf_program prog{};
     if (pcap_compile(impl_->handle, &prog, bpf.c_str(), 1, PCAP_NETMASK_UNKNOWN) == -1) {
         throw std::runtime_error(std::string("pcap_compile failed: ") + pcap_geterr(impl_->handle));
     }
-    
+
     if (pcap_setfilter(impl_->handle, &prog) == -1) {
         pcap_freecode(&prog);
         throw std::runtime_error(std::string("pcap_setfilter failed: ") + pcap_geterr(impl_->handle));
     }
-    
+
     pcap_freecode(&prog);
 }
 

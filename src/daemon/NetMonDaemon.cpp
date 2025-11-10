@@ -29,7 +29,15 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     std::string offline_file = read_offline ? config["offline"]["file"].as<std::string>() : "";
     
     // Initialize PcapAdapter
-    pcap_ = std::make_unique<PcapAdapter>(iface_or_file, bpf_filter, promiscuous, snaplen, timeout, read_offline);
+    PcapAdapter::Options opts;
+    opts.iface_or_file = iface_or_file;      // string: interface or file path
+    opts.bpf_filter    = bpf_filter;         // string: BPF filter expression
+    opts.promiscuous   = promiscuous;        // bool: promiscuous mode
+    opts.snaplen       = snaplen;            // int: snapshot length
+    opts.timeout_ms    = timeout;            // int: timeout in ms
+    opts.read_offline  = read_offline;       // bool: offline mode
+
+    pcap_ = std::make_unique<PcapAdapter>(opts);
     
     // Initialize StatsAggregator
     if (!config["stats"] || !config["stats"]["window_size"] || !config["stats"]["history_depth"]) {
@@ -137,7 +145,15 @@ void NetMonDaemon::run()
                 int timeout = config["interface"]["timeout_ms"].as<int>();
                 bool read_offline = config["offline"] && config["offline"]["file"];
                 std::string offline_file = read_offline ? config["offline"]["file"].as<std::string>() : "";
-                pcap_ = std::make_unique<PcapAdapter>(iface_or_file, bpf_filter, promiscuous, snaplen, timeout, read_offline);
+                PcapAdapter::Options opts;
+                opts.iface_or_file = iface_or_file;      // string: interface or file path
+                opts.bpf_filter    = bpf_filter;         // string: BPF filter expression
+                opts.promiscuous   = promiscuous;        // bool: promiscuous mode
+                opts.snaplen       = snaplen;            // int: snapshot length
+                opts.timeout_ms    = timeout;            // int: timeout in ms
+                opts.read_offline  = read_offline;       // bool: offline mode
+
+                pcap_ = std::make_unique<PcapAdapter>(opts);
 
                 // Re-init StatsAggregator
                 int window_size = config["stats"]["window_size"].as<int>();
@@ -182,6 +198,18 @@ void NetMonDaemon::run()
     }
 
     pcap_->stopCapture();
+    // for CI/integration use:
+    // std::cout << "✅ Capture complete! API server will remain runing for 500 seconds to allow pending requests." << std::endl;
+    // std::this_thread::sleep_for(std::chrono::seconds(500));
+    
+    // During manual testing use:
+    std::cout << "✅ Capture complete! Press Ctrl+C to exit." << std::endl;
+    while (running_.load()) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    // When running_ is set to false (e.g., via /control/stop), exit and clean up
+    stop();
 }
 
 void NetMonDaemon::stop()

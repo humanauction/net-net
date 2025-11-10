@@ -104,7 +104,14 @@ std::vector<AggregatedStats> StatsPersistence::loadHistory(size_t max_windows) {
         int bytes_c2s = sqlite3_column_int(stmt, 9);
         int bytes_s2c = sqlite3_column_int(stmt, 10);
 
-        FlowKey key{iface, protocol, src_ip, src_port, dst_ip, dst_port};
+        FlowKey key{
+            iface,
+            static_cast<uint8_t>(protocol),
+            src_ip,
+            static_cast<uint16_t>(src_port),
+            dst_ip,
+            static_cast<uint16_t>(dst_port)
+        };
         FlowStats fs;
         fs.pkts_c2s = pkts_c2s;
         fs.pkts_s2c = pkts_s2c;

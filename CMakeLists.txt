@@ -11,8 +11,16 @@ set(ENV{PKG_CONFIG_PATH} "/usr/local/opt/libpcap/lib/pkgconfig:$ENV{PKG_CONFIG_P
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCAP REQUIRED libpcap)
 
+# Find sqlite3
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+
 # Core library
-add_library(netnet-core
+add_library(netnet-core STATIC
+    src/core/ConnectionTracker.cpp
+    src/core/StatsAggregator.cpp
+    src/core/StatsPersistence.cpp
+    src/core/parser.cpp
     src/net/PcapAdapter.cpp
 )
 
@@ -32,11 +40,32 @@ target_link_libraries(netnet-core
 # Main executable (for testing)
 add_executable(netnet
     src/main.cpp
+    src/daemon/NetMonDaemon.cpp
+)
+
+target_include_directories(netnet
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/net
+)
+
+find_package(yaml-cpp REQUIRED)
+
+target_link_libraries(netnet
+    PRIVATE
+        netnet-core
+        yaml-cpp
 )
 
 target_link_libraries(netnet
     PRIVATE
         netnet-core
+        ${SQLITE3_LIBRARIES}
+)
+
+target_include_directories(netnet
+    PRIVATE
+        ${SQLITE3_INCLUDE_DIRS}
 )
 
 # Testing START
@@ -130,11 +159,12 @@ add_executable(test_stats_aggregator_integration
     tests/integration/test_stats_aggregator_integration.cpp
     src/core/StatsAggregator.cpp
     src/core/parser.cpp
+    src/core/ConnectionTracker.cpp 
 )
 
 target_include_directories(test_stats_aggregator_integration
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/net
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
 )
 
 target_link_libraries(test_stats_aggregator_integration
