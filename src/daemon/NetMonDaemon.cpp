@@ -198,18 +198,17 @@ void NetMonDaemon::run()
     }
 
     pcap_->stopCapture();
-    // for CI/integration use:
-    // std::cout << "✅ Capture complete! API server will remain runing for 500 seconds to allow pending requests." << std::endl;
-    // std::this_thread::sleep_for(std::chrono::seconds(500));
+    std::cout << "✅ Capture complete! API server will remain running for 500 seconds to allow pending requests." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(500));
     
     // During manual testing use:
-    std::cout << "✅ Capture complete! Press Ctrl+C to exit." << std::endl;
-    while (running_.load()) {
+    std::cout << "Capture complete! Press Ctrl+C to exit." << std::endl;
+    while (true) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     // When running_ is set to false (e.g., via /control/stop), exit and clean up
-    stop();
+    // stop();
 }
 
 void NetMonDaemon::stop()

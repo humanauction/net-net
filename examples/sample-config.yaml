@@ -79,7 +79,7 @@ api:
   bind: "127.0.0.1"
   
   # Port
-  port: 8080
+  port: 8082
   
   # Authentication token (testing only, use a secure token in production)
   # token: "your-secret-token-here"
