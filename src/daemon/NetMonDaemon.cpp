@@ -11,44 +11,56 @@
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
     : config_path_(config_path)
 {
-    // TODO: Load config, initialize PcapAdapter, StatsAggregator, StatsPersistence
     YAML::Node config = YAML::LoadFile(config_path_);
-    if (!config["interface"] || !config["interface"]["name"]) {
-        throw std::runtime_error("Missing required 'interface.name' in config");
-    }
+
+    // API token check
     if (!config["api"] || !config["api"]["token"]) {
         throw std::runtime_error("Config missing 'api.token' required");
     }
     api_token_ = config["api"]["token"].as<std::string>();
-    
-    std::string iface_or_file = config["interface"]["name"].as<std::string>();
-    std::string bpf_filter = config["interface"] && config["interface"]["bpf_filter"] ? config["interface"]["bpf_filter"].as<std::string>() : "";
-    bool promiscuous = config["interface"] && config["interface"]["promiscuous"] ? config["interface"]["promiscuous"].as<bool>() : true;
-    int snaplen = config["interface"]["snaplen"].as<int>();
-    int timeout = config["interface"]["timeout_ms"].as<int>();
+
+    // Prioritize offline mode
     bool read_offline = config["offline"] && config["offline"]["file"];
-    std::string offline_file = read_offline ? config["offline"]["file"].as<std::string>() : "";
-    
+    std::string iface_or_file;
+    bool promiscuous = true;
+    int snaplen = 65535;
+    int timeout = 1000;
+    std::string bpf_filter;
+
+    if (read_offline) {
+        iface_or_file = config["offline"]["file"].as<std::string>();
+        // Optionally, allow offline-specific options here
+        std::cout << "Running in offline mode with file: " << iface_or_file << std::endl;
+    } else if (config["interface"] && config["interface"]["name"]) {
+        iface_or_file = config["interface"]["name"].as<std::string>();
+        bpf_filter = config["interface"]["bpf_filter"] ? config["interface"]["bpf_filter"].as<std::string>() : "";
+        promiscuous = config["interface"]["promiscuous"] ? config["interface"]["promiscuous"].as<bool>() : true;
+        snaplen = config["interface"]["snaplen"] ? config["interface"]["snaplen"].as<int>() : 65535;
+        timeout = config["interface"]["timeout_ms"] ? config["interface"]["timeout_ms"].as<int>() : 1000;
+        std::cout << "Running in live mode on interface: " << iface_or_file << std::endl;
+    } else {
+        throw std::runtime_error("Missing required 'offline.file' or 'interface.name' in config");
+    }
+
     // Initialize PcapAdapter
     PcapAdapter::Options opts;
-    opts.iface_or_file = iface_or_file;      // string: interface or file path
-    opts.bpf_filter    = bpf_filter;         // string: BPF filter expression
-    opts.promiscuous   = promiscuous;        // bool: promiscuous mode
-    opts.snaplen       = snaplen;            // int: snapshot length
-    opts.timeout_ms    = timeout;            // int: timeout in ms
-    opts.read_offline  = read_offline;       // bool: offline mode
-
+    opts.iface_or_file = iface_or_file;
+    opts.bpf_filter    = bpf_filter;
+    opts.promiscuous   = promiscuous;
+    opts.snaplen       = snaplen;
+    opts.timeout_ms    = timeout;
+    opts.read_offline  = read_offline;
     pcap_ = std::make_unique<PcapAdapter>(opts);
-    
-    // Initialize StatsAggregator
+
+    // StatsAggregator
     if (!config["stats"] || !config["stats"]["window_size"] || !config["stats"]["history_depth"]) {
         throw std::runtime_error("Missing required 'stats.window_size' or 'stats.history_depth' in config");
     }
-    int window_size = config["stats"] && config["stats"]["window_size"] ? config["stats"]["window_size"].as<int>() : 1;
-    int history_depth = config["stats"] && config["stats"]["history_depth"] ? config["stats"]["history_depth"].as<int>() : 1;
+    int window_size = config["stats"]["window_size"].as<int>();
+    int history_depth = config["stats"]["history_depth"].as<int>();
     aggregator_ = std::make_unique<StatsAggregator>(std::chrono::seconds(window_size), history_depth);
-    
-    // Initialize StatsPersistence
+
+    // StatsPersistence
     if (!config["database"] || !config["database"]["path"]) {
         throw std::runtime_error("Missing required 'database.path' in config");
     }

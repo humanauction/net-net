@@ -63,14 +63,14 @@ stats:
   history_depth: 24
 
 # Persistence (optional)
-# database:
+database:
   # SQLite file path for historical data
   path: "netnet.db"
   
   # Retention period in days
   retention_days: 7
 
-API/Daemon Configuration
+# API/Daemon Configuration:
 api:
   # Enable REST API
   enabled: true
@@ -115,5 +115,5 @@ performance:
   buffer_size: 2097152  # 2MB
   
   # Worker thread count for packet processing
-  0 = auto-detect CPU count
+  # 0 = auto-detect CPU count
   worker_threads: 0
