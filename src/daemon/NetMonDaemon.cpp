@@ -5,6 +5,7 @@
 #include <chrono>
 #include "httplib.h" // For HTTP server (if needed)
 #include <sstream>
+#include <csignal>
 
 
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
@@ -188,27 +189,29 @@ void NetMonDaemon::run()
         // TO DO: handle parse errors/logging
     });
     //  Main loop
-    while(running_.load()) {
+    while(NetMonDaemon::running_signal_ && isRunning()) {
         // Periodically call advanceWindow() and persist stats
         aggregator_->advanceWindow();
         auto stats = aggregator_->currentStats();
         persistence_->saveWindow(stats);
         // Sleep (or break) logic here
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 
     pcap_->stopCapture();
     std::cout << "✅ Capture complete! API server will remain running for 500 seconds to allow pending requests." << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds(500));
+    for (int i=0; i < 100 && NetMonDaemon::running_signal_; ++i) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
     
+    // When running_ is set to false (e.g., via /control/stop), exit and clean up
+    stop();
+
     // During manual testing use:
     std::cout << "Capture complete! Press Ctrl+C to exit." << std::endl;
     while (true) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
-
-    // When running_ is set to false (e.g., via /control/stop), exit and clean up
-    // stop();
 }
 
 void NetMonDaemon::stop()
@@ -243,13 +246,28 @@ void NetMonDaemon::logAuthFailure(const httplib::Request& req) const {
 }
 
 int main(int argc, char* argv[]) {
-    // Check for config path argument
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <config_path.yaml>" << std::endl;
+    std::string config_path;
+    for (int i = 1; i < argc -1; ++i) {
+        if (std::string(argv[i]) == "--config") {
+            config_path = argv[i + 1];
+            break;
+        }
+    }
+    if (config_path.empty()) {
+        std::cerr << "Usage: " << argv[0] << " --config <config_path.yaml>" << std::endl;
         return 1;
     }
-    std::string config_path = argv[1];
+
+    std::signal(SIGINT, NetMonDaemon::signalHandler);
     NetMonDaemon daemon(config_path);
+    daemon.setRunning(true);
     daemon.run();
     return 0;
+}
+
+std::atomic<bool> NetMonDaemon::running_signal_{true};
+
+void NetMonDaemon::signalHandler(int signum) {
+    std::cout << "\n[INFO] Signal (" << signum << ") received. Shutting down..." << std::endl;
+    running_signal_ = false;
 }

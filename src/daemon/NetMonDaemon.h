@@ -14,11 +14,15 @@ public:
     NetMonDaemon(const std::string& config_path);
     void run();
     void stop();
+    void setRunning(bool value) { running_ = value; }
+    bool isRunning() const { return running_.load(); }
+    static void signalHandler(int signum);
 private:
     bool isAuthorized(const httplib::Request& req) const;
     void logAuthFailure(const httplib::Request& req) const;
     mutable std::shared_mutex reload_mutex;
     std::atomic<bool> running_{false};
+    static std::atomic<bool> running_signal_;
     std::string config_path_;
     std::thread api_thread_;
     std::string api_token_;
