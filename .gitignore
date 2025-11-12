@@ -106,3 +106,7 @@ doxygen_warnings.txt
 # Backup files
 *.bak
 *.backup
+
+# Python cache files
+__pycache__/
+*.pyc

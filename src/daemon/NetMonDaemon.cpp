@@ -241,3 +241,15 @@ void NetMonDaemon::logAuthFailure(const httplib::Request& req) const {
     if (req.has_param("token")) std::cerr << " (token param present)";
     std::cerr << std::endl;
 }
+
+int main(int argc, char* argv[]) {
+    // Check for config path argument
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <config_path.yaml>" << std::endl;
+        return 1;
+    }
+    std::string config_path = argv[1];
+    NetMonDaemon daemon(config_path);
+    daemon.run();
+    return 0;
+}

@@ -95,7 +95,9 @@ int main(int argc, char* argv[]) {
         // Main loop
         if (offline_mode) {
             // Offline mode: wait for processing to complete
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            while (running.load()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));  
+            }    
         } else {
             // Live capture: run until interrupted
             while (running.load()) {

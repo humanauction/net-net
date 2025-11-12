@@ -40,7 +40,11 @@ target_link_libraries(netnet-core
 # Main executable (for testing)
 add_executable(netnet
     src/main.cpp
-    src/daemon/NetMonDaemon.cpp
+    src/net/PcapAdapter.cpp
+    src/core/StatsAggregator.cpp
+    src/core/StatsPersistence.cpp
+    src/core/parser.cpp
+    src/core/ConnectionTracker.cpp
 )
 
 target_include_directories(netnet
@@ -55,11 +59,6 @@ target_link_libraries(netnet
     PRIVATE
         netnet-core
         yaml-cpp
-)
-
-target_link_libraries(netnet
-    PRIVATE
-        netnet-core
         ${SQLITE3_LIBRARIES}
 )
 
@@ -120,7 +119,7 @@ add_executable(test_connection_tracker
 
 target_include_directories(test_connection_tracker
     PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
 )
 
 target_link_libraries(test_connection_tracker
@@ -142,7 +141,7 @@ add_executable(test_stats_aggregator
 
 target_include_directories(test_stats_aggregator
     PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
 )
 
 target_link_libraries(test_stats_aggregator
@@ -175,3 +174,31 @@ target_link_libraries(test_stats_aggregator_integration
 )
 
 add_test(NAME StatsAggregatorIntegration COMMAND test_stats_aggregator_integration)
+
+# TEST: api daemon
+
+add_executable(netnet-daemon
+    src/daemon/NetMonDaemon.cpp
+    src/net/PcapAdapter.cpp
+    src/core/StatsAggregator.cpp
+    src/core/StatsPersistence.cpp
+    src/core/parser.cpp
+    src/core/ConnectionTracker.cpp
+)
+
+target_include_directories(netnet-daemon
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/net
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
+)
+
+target_link_libraries(netnet-daemon
+    PRIVATE
+        yaml-cpp 
+        pthread
+        sqlite3
+        netnet-core
+)
+
