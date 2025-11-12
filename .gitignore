@@ -110,3 +110,4 @@ doxygen_warnings.txt
 # Python cache files
 __pycache__/
 *.pyc
+tests/integration/__pycache__/
