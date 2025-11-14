@@ -184,12 +184,12 @@ void NetMonDaemon::run()
                 res.set_content("{\"status\":\"reloaded\"}", "application/json");
             } catch (const std::exception& ex) {
                 std::cerr << "[ERROR] Reload failed: " << ex.what() << std::endl;
-                res.status = 500;
+                res.status = 100;
                 res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
             }
         });
 
-        svr_.listen("0.0.0.0", 8080);
+        svr_.listen("0.0.0.0", 8082);
     });
 
     // Start packet capture with a callback that feeds packets to StatsAggregator
@@ -211,7 +211,7 @@ void NetMonDaemon::run()
     }
 
     pcap_->stopCapture();
-    std::cout << "✅ Capture complete! API server will remain running for 500 seconds to allow pending requests." << std::endl;
+    std::cout << "✅ Capture complete! API server will remain running for 100 seconds to allow pending requests." << std::endl;
     for (int i=0; i < 100 && NetMonDaemon::running_signal_; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
