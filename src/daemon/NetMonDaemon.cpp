@@ -1,9 +1,10 @@
 #include "NetMonDaemon.h"
 #include <iostream>
+#include <iomanip>
 #include <yaml-cpp/yaml.h>
 #include <thread>
 #include <chrono>
-#include "httplib.h" // For HTTP server (if needed)
+#include "httplib.h" // For HTTP server
 #include <sstream>
 #include <csignal>
 #include "net/PcapAdapter.h"
@@ -11,6 +12,8 @@
 #include <sys/types.h>
 #include <pwd.h>
 #include <grp.h>
+
+
 
 
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
@@ -37,14 +40,14 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     if (read_offline) {
         iface_or_file = config["offline"]["file"].as<std::string>();
         // Optionally, allow offline-specific options here
-        std::cout << "Running in offline mode with file: " << iface_or_file << std::endl;
+        log("info", "Running in offline mode with file: " + iface_or_file);
     } else if (config["interface"] && config["interface"]["name"]) {
         iface_or_file = config["interface"]["name"].as<std::string>();
         bpf_filter = config["interface"]["bpf_filter"] ? config["interface"]["bpf_filter"].as<std::string>() : "";
         promiscuous = config["interface"]["promiscuous"] ? config["interface"]["promiscuous"].as<bool>() : true;
         snaplen = config["interface"]["snaplen"] ? config["interface"]["snaplen"].as<int>() : 65535;
         timeout = config["interface"]["timeout_ms"] ? config["interface"]["timeout_ms"].as<int>() : 1000;
-        std::cout << "Running in live mode on interface: " << iface_or_file << std::endl;
+        log("info", "Running in live mode on interface: " + iface_or_file);
         // BPF filter validation
         if (!bpf_filter.empty() && !isValidBpfFilter(bpf_filter)) {
             throw std::runtime_error("Invalid BPF filter: contains forbidden characters or is too long");
@@ -79,29 +82,42 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     std::string db_path = config["database"]["path"].as<std::string>();
     persistence_ = std::make_unique<StatsPersistence>(db_path);
 
-    std::cout << "NetMonDaemon initialized with config: " << config_path_ << std::endl;
-
+    log("info", "NetMonDaemon initialized with config: " + config_path_);
+    // Drop privileges
     if (config["privilege"] && config["privilege"]["drop"] && config["privilege"]["drop"].as<bool>()) {
         std::string user = config["privilege"]["user"] ? config["privilege"]["user"].as<std::string>() : "nobody";
         std::string group = config["privilege"]["group"] ? config["privilege"]["group"].as<std::string>() : "nogroup";
         struct passwd* pw = getpwnam(user.c_str());
         struct group* gr = getgrnam(group.c_str());
         if (!pw || !gr) {
-            std::cerr << "[ERROR] Invalid user/group for privilege drop\n";
+            log("error", "[ERROR] Invalid user/group for privilege drop");
             exit(1);
         }
         if (setgid(gr->gr_gid) != 0 || setuid(pw->pw_uid) != 0) {
-            std::cerr << "[ERROR] Failed to drop privileges\n";
+            log("error", "[ERROR] Failed to drop privileges");
             exit(1);
         }
-        std::cout << "[INFO] Dropped privileges to " << user << ":" << group << std::endl;
+        log("info", "Dropped privileges to " + user + ":" + group);
+    }
+    // Logging Level and File Configuration
+    if (config["logging"]) {
+        log_level_ = config["logging"]["level"] ? config["logging"]["level"].as<std::string>() : "info";
+        log_file_ = config["logging"]["file"] ? config["logging"]["file"].as<std::string>() : "";
+        log_timestamps_ = config["logging"]["timestamps"] ? config["logging"]["timestamps"].as<bool>() : true;
+        if(!log_file_.empty()) {
+            log_stream_.open(log_file_, std::ios::app);
+            if (!log_stream_) {
+                log("error", "[ERROR] Could not open log file: " + log_file_);
+                exit(1);
+            }
+        }
     }
 }
 
 void NetMonDaemon::run()
 {
     running_ = true;
-    std::cout << "NetMonDaemon is running..." << std::endl;
+    log("info", "NetMonDaemon is running...");
 
     // Start REST API server
     api_thread_ = std::thread([this]() {
@@ -221,13 +237,11 @@ void NetMonDaemon::run()
                 std::string db_path = config["database"]["path"].as<std::string>();
                 persistence_ = std::make_unique<StatsPersistence>(db_path);
 
-                std::cout << "[INFO] Config reloaded successfully at " 
-                          << std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) 
-                          << std::endl;
+                log("info", "Config reloaded successfully at " + std::to_string(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())));
 
                 res.set_content("{\"status\":\"reloaded\"}", "application/json");
             } catch (const std::exception& ex) {
-                std::cerr << "[ERROR] Reload failed: " << ex.what() << std::endl;
+                log("error", "[ERROR] Reload failed: " + std::string(ex.what()));
                 res.status = 100;
                 res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
             }
@@ -254,7 +268,7 @@ void NetMonDaemon::run()
     }
 
     pcap_->stopCapture();
-    std::cout << "✅ Capture complete! API server will remain running for 100 seconds to allow pending requests." << std::endl;
+    log("info", "✅ Capture complete! API server will remain running for 100 seconds to allow pending requests.");
     for (int i=0; i < 100 && NetMonDaemon::running_signal_; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
@@ -263,7 +277,7 @@ void NetMonDaemon::run()
     stop();
 
     // During manual testing use:
-    std::cout << "Capture complete! Press Ctrl+C to exit." << std::endl;
+    log("info", "Capture complete! Press Ctrl+C to exit.");
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
@@ -272,7 +286,7 @@ void NetMonDaemon::run()
 void NetMonDaemon::stop()
 {
     running_ = false;
-    std::cout << "NetMonDaemon is stopping..." << std::endl;
+    log("info", "NetMonDaemon is stopping...");
     // TODO: shutdown logic here
     // Stop API server and join thread
     // (cpp-httplib stops when svr.stop() is called)
@@ -293,11 +307,11 @@ bool NetMonDaemon::isAuthorized(const httplib::Request& req) const {
 }
 
 void NetMonDaemon::logAuthFailure(const httplib::Request& req) const {
-    std::cerr << "[AUTH FAIL] " << req.method << " " << req.path;
+    std::cerr << "[AUTH FAIL] " + req.method + " " + req.path << std::endl;
     auto auth = req.get_header_value("Authorization");
-    if (!auth.empty()) std::cerr << " (Authorization header present)";
-    if (req.has_param("token")) std::cerr << " (token param present)";
-    std::cerr << std::endl;
+    if (!auth.empty()) std::cerr << "error" << " (Authorization header present)";
+    if (req.has_param("token")) std::cerr << "error" << " (token param present)";
+    std::cerr << "error" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -323,6 +337,33 @@ int main(int argc, char* argv[]) {
 std::atomic<bool> NetMonDaemon::running_signal_{true};
 
 void NetMonDaemon::signalHandler(int signum) {
-    std::cout << "\n[INFO] Signal (" << signum << ") received. Shutting down..." << std::endl;
+    std::cout << "\n[INFO] Signal (" + std::to_string(signum) + ") received. Shutting down..." << std::endl;
     running_signal_ = false;
+}
+
+// Logging helper
+void NetMonDaemon::log(const std::string& level, const std::string& msg) {
+    if (shouldLog(level)) {
+        std::ostringstream oss;
+        if (log_timestamps_) {
+            auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            oss << "[" << std::put_time(std::localtime(&now), "%F %T") << "] ";
+        }
+        oss << "[" << level << "] " << msg << std::endl;
+        if (log_stream_.is_open()) {
+            log_stream_ << oss.str();
+            log_stream_.flush();
+        } else {
+            std::cout << oss.str();
+        }
+    }
+}
+
+bool NetMonDaemon::shouldLog(const std::string& level) {
+    static const std::map<std::string, int> levels = {
+        {"debug", 0}, {"info", 1}, {"warn", 2}, {"error", 3}
+    };
+    int configured = levels.count(log_level_) ? levels.at(log_level_) : 1;
+    int current = levels.count(level) ? levels.at(level) : 1;
+    return current >= configured;
 }

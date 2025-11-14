@@ -9,6 +9,7 @@
 #include <shared_mutex>
 #include <chrono>
 #include <unordered_map>
+#include <fstream>
 // add more here as/when we need/make it (e.g. config, threading, API, etc...)
 
 class NetMonDaemon {
@@ -24,6 +25,8 @@ private:
     const std::chrono::seconds control_rate_limit_{2};
     bool isAuthorized(const httplib::Request& req) const;
     void logAuthFailure(const httplib::Request& req) const;
+    void log(const std::string& level, const std::string& msg);
+    bool shouldLog(const std::string& level);
     mutable std::shared_mutex reload_mutex;
     std::atomic<bool> running_{false};
     static std::atomic<bool> running_signal_;
@@ -34,4 +37,8 @@ private:
     std::unique_ptr<StatsAggregator> aggregator_;
     std::unique_ptr<StatsPersistence> persistence_;
     httplib::Server svr_;
+    std::string log_file_;   
+    std::string log_level_;
+    bool log_timestamps_ = true;
+    std::ofstream log_stream_;
 };

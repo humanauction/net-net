@@ -92,10 +92,8 @@ api:
 logging:
   # Log level: debug, info, warn, error
   level: "info"
-  
   # Log file path (empty = stdout only)
   file: ""
-  
   # Include timestamps
   timestamps: true
 
@@ -104,7 +102,7 @@ privilege:
   drop: true
   user: "nobody"
   group: "nogroup"
-  
+
 # Performance Tuning
 performance:
   # Buffer size for packet capture (bytes)
