@@ -61,6 +61,7 @@ net-net/
 │  └─ docker-compose.yml
 ├─ docs/
 │  ├─ design.md
+│  ├─ securityChecklistReview.md
 │  ├─ api.md
 │  └─ perf.md
 ├─ examples/
@@ -88,7 +89,7 @@ Per-interface, per-protocol bandwidth statistics.
 
 Configurable sampling and aggregation windows.
 
-Optional Qt dashboard with live charts and alerts.
+Qt dashboard with live charts and alerts.
 
 CLI daemon mode for headless deployments.
 
@@ -106,7 +107,7 @@ Qt 6 (optional, for dashboard).
 
 Docker (optional for CI).
 
-Python (optional for SYN packet generation script).
+Python (optional for testing, SYN packet generation script).
 
 ## Quick start
 
@@ -153,12 +154,9 @@ database:
 - Privilege drop occurs after opening the capture device, before starting the API server.
 - If the specified user/group is invalid or privilege drop fails, the daemon will exit with an error.
 
-## Development stages
+## Development Milestones
 
-See DEVELOPMENT.mds, below.
-
-Development broken down into stages (milestones)
-Work divided into five stages. Each stage lists deliverables and focused tests.
+Development broken down into 5 sprints, each divided into several tasks. See stages below for related deliverables and focused tests.
 
 ### Stage 0 — Planning and design (Estimate: 2–3 days. Actual: 10 days)
 
@@ -202,7 +200,7 @@ See docs/design.md for full architecture.
 
 - Tests: unit tests for aggregation maths; integration test verifying outputs over recorded pcap simulation.
 
-### Stage 4 — CLI daemon + REST API (Estimate:5–7 days; Actual: In Progress)
+### Stage 4 — CLI daemon + REST API (Estimate:5–7 days; Actual: 7 days)
 
 - Implement NetMonDaemon to run headless.
 
@@ -210,7 +208,7 @@ See docs/design.md for full architecture.
 
 - Add authentication token for API access.
 
-- Tests: integration tests for REST endpoints; security review checklist.
+- Tests: integration tests for REST endpoints; security review checklist. See: docs/securityChecklistReview.md for details.
 
 ### Stage 5 — Qt dashboard and alerts (Estimate: 6–10 days; Actual: Pending)
 
@@ -232,41 +230,39 @@ See docs/design.md for full architecture.
 
 - Finalize docs, example configs, concise README.
 
-## Interfaces and key class examples (API sketch)
+## Interfaces and Key Classes (API Sketch)
 
-- PcapAdapter
+#### PcapAdapter
 
-  - start(interface, bpfFilter, packetCallback)
+- `start(iface_or_file, bpf_filter, packetCallback)`
+- `stop()`
 
-  - stop()
+#### Parser
 
-- Parser
+- `parse(rawPacket) -> PacketMeta`  
+    Returns: `{ timestamp, iface, layers... }`
 
-  - parse(rawPacket) -> ParsedPacket {timestamp, iface, layers...}
+#### ConnectionTracker
 
-- ConnectionTracker
+- `ingest(PacketMeta)`
+- `getActiveConnections() -> std::vector<FlowInfo>`
 
-  - ingest(parsedPacket)
+#### StatsAggregator
 
-  - getActiveConnections()
+- `ingest(ConnectionEvent)`
+- `getMetrics(window) -> MetricsJson`
 
-- StatsAggregator
+#### NetMonDaemon
 
-  - ingest(parsedEvent)
+- `loadConfig(path)`
+- `run()`
+- REST API: `/metrics`, `/control/start`, `/control/stop`, `/control/reload` (token required)
 
-  - getMetrics(window) -> JSON-like struct
+#### QtDashboard
 
-- NetMonDaemon
+- subscribeToMetrics(source)
 
-  - loadConfig(path)
-
-  - run()
-
-- QtDashboard
-
-  - subscribeToMetrics(source)
-
-  - render()
+- render()
 
 ## Testing, security, deployment, future development, notes (mostly to self)
 
@@ -290,14 +286,14 @@ See docs/design.md for full architecture.
     group: "nogroup"
   ```
 
-- Sanitize config input; protect REST API with tokens.
-- Careful with executing system calls; none should be exposed via API.
+- Sanitized config input; REST API protection via tokens.
+- Careful with executing system calls; none should be exposed by API.
 
 ### Deployment
 
-- Provide Docker for daemon mode with CAP_NET_RAW capability.
+- Docker for daemon mode with CAP_NET_RAW capability.
 
-- For desktop users: ship Qt app as separate artifact; use: installer or AppImage on Linux.
+- For desktop users: Qt app separate artifact; use: installer or AppImage on Linux.
 
 ## Test Fixtures
 
