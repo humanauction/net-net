@@ -6,6 +6,7 @@
 #include "httplib.h" // For HTTP server (if needed)
 #include <sstream>
 #include <csignal>
+#include "net/PcapAdapter.h"
 
 
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
@@ -18,6 +19,8 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
         throw std::runtime_error("Config missing 'api.token' required");
     }
     api_token_ = config["api"]["token"].as<std::string>();
+
+    
 
     // Prioritize offline mode
     bool read_offline = config["offline"] && config["offline"]["file"];
@@ -38,6 +41,10 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
         snaplen = config["interface"]["snaplen"] ? config["interface"]["snaplen"].as<int>() : 65535;
         timeout = config["interface"]["timeout_ms"] ? config["interface"]["timeout_ms"].as<int>() : 1000;
         std::cout << "Running in live mode on interface: " << iface_or_file << std::endl;
+        // BPF filter validation
+        if (!bpf_filter.empty() && !isValidBpfFilter(bpf_filter)) {
+            throw std::runtime_error("Invalid BPF filter: contains forbidden characters or is too long");
+        }
     } else {
         throw std::runtime_error("Missing required 'offline.file' or 'interface.name' in config");
     }
@@ -51,6 +58,7 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     opts.timeout_ms    = timeout;
     opts.read_offline  = read_offline;
     pcap_ = std::make_unique<PcapAdapter>(opts);
+
 
     // StatsAggregator
     if (!config["stats"] || !config["stats"]["window_size"] || !config["stats"]["history_depth"]) {

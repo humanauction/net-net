@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <mutex>
 #include <shared_mutex>
+#include <regex>
 
 struct PcapAdapter::Impl {
     Options opts;
@@ -141,4 +142,19 @@ void PcapAdapter::setFilter(const std::string& bpf) {
 
 std::string PcapAdapter::source() const noexcept {
     return impl_->source_name;
+}
+
+bool isValidBpfFilter(const std::string& filter) {
+        // Allow only alphanumerics, spaces, and basic BPF symbols
+        static const std::regex safe_bpf(R"(^[a-zA-Z0-9 _\(\)\.\,\=\>\<\!\-]*$)");
+        if (filter.length() > 128) return false; // length limit variable
+        if (!std::regex_match(filter, safe_bpf)) return false;
+        // Check for forbidden keywords
+        static const std::vector<std::string> forbidden = {
+            " or ", " and ", ";", "|", "&", "`", "$(", ")", "{", "}", "[", "]"
+        };
+        for (const auto& bad : forbidden) {
+            if (filter.find(bad) != std::string::npos) return false;
+        }
+        return true;
 }

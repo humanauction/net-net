@@ -7,7 +7,7 @@
 #include "../core/PacketMeta.h"
 
 using PacketCallback = std::function<void(const PacketMeta&, const uint8_t*, size_t)>;
-
+bool isValidBpfFilter(const std::string& filter);
 class PcapAdapter {
 public:
     struct Options{
@@ -56,4 +56,6 @@ private:
 
     friend void pcap_bridge(unsigned char*, const struct pcap_pkthdr*, const unsigned char*);
 };
+
+
 
