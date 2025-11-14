@@ -7,6 +7,8 @@
 #include "net/PcapAdapter.h"
 #include "httplib.h"
 #include <shared_mutex>
+#include <chrono>
+#include <unordered_map>
 // add more here as/when we need/make it (e.g. config, threading, API, etc...)
 
 class NetMonDaemon {
@@ -18,6 +20,8 @@ public:
     bool isRunning() const { return running_.load(); }
     static void signalHandler(int signum);
 private:
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_control_request_;
+    const std::chrono::seconds control_rate_limit_{2};
     bool isAuthorized(const httplib::Request& req) const;
     void logAuthFailure(const httplib::Request& req) const;
     mutable std::shared_mutex reload_mutex;
@@ -30,5 +34,4 @@ private:
     std::unique_ptr<StatsAggregator> aggregator_;
     std::unique_ptr<StatsPersistence> persistence_;
     httplib::Server svr_;
-    // add more here as/when we make/need it
 };

@@ -129,6 +129,14 @@ void NetMonDaemon::run()
                 res.set_content("{\"error\":\"unauthorized\"}", "application/json");
                 return;
             }
+            auto now = std::chrono::steady_clock::now();
+            auto& last =  last_control_request_["/control/start"];
+            if (now - last < control_rate_limit_) {
+                res.status= 429;
+                res.set_content("{\"error\":\"rate limit exceeded\"}", "application/json");
+                return;
+            }
+            last = now;
             running_ = true;
             res.set_content("{\"status\":\"started\"}", "application/json");
         });
@@ -140,6 +148,14 @@ void NetMonDaemon::run()
                 res.set_content("{\"error\":\"unauthorized\"}", "application/json");
                 return;
             }
+            auto now = std::chrono::steady_clock::now();
+            auto& last =  last_control_request_["/control/stop"];
+            if (now - last < control_rate_limit_) {
+                res.status= 429;
+                res.set_content("{\"error\":\"rate limit exceeded\"}", "application/json");
+                return;
+            }
+            last = now;
             running_ = false;
             res.set_content("{\"status\":\"stopped\"}", "application/json");
         });
