@@ -122,7 +122,36 @@ sudo ./netmon --config ../examples/sample-config.yaml # capture requires privile
 
 ## Configuration
 
-sample-config.yaml lists interfaces, capture mode, aggregation window, alert thresholds.
+sample-config.yaml lists interfaces, capture mode, aggregation window, alert thresholds, and privilege drop options.
+
+Example:
+
+```yaml
+interface:
+  name: "en0"
+  bpf_filter: "icmp"
+  promiscuous: true
+  snaplen: 65535
+  timeout_ms: 1000
+
+privilege:
+  drop: true
+  user: "nobody"
+  group: "nogroup"
+
+api:
+  port: 8080
+  token: "your_secure_token"
+
+database:
+  path: "netnet.db"
+  retention_days: 7
+```
+
+**Note:**  
+
+- Privilege drop occurs after opening the capture device, before starting the API server.
+- If the specified user/group is invalid or privilege drop fails, the daemon will exit with an error.
 
 ## Development stages
 
@@ -251,10 +280,17 @@ See docs/design.md for full architecture.
 
 ### Security
 
-- Run capture code with minimal privileges; drop to unprivileged user after opening capture.
+- Run capture code with minimal privileges; **drop to unprivileged user/group after opening capture device**.
+- Configure privilege drop in `sample-config.yaml`:
+
+  ```yaml
+  privilege:
+    drop: true
+    user: "nobody"
+    group: "nogroup"
+  ```
 
 - Sanitize config input; protect REST API with tokens.
-
 - Careful with executing system calls; none should be exposed via API.
 
 ### Deployment

@@ -100,17 +100,11 @@ logging:
   timestamps: true
 
 # Security
-security:
-  # Drop privileges after opening capture device
-  # Requires starting as root
-  drop_privileges: true
+privilege:
+  drop: true
+  user: "nobody"
+  group: "nogroup"
   
-  # User to drop to (leave empty to use current user)
-  run_as_user: ""
-  
-  # Group to drop to
-  run_as_group: ""
-
 # Performance Tuning
 performance:
   # Buffer size for packet capture (bytes)
@@ -120,3 +114,4 @@ performance:
   # Worker thread count for packet processing
   # 0 = auto-detect CPU count
   worker_threads: 0
+

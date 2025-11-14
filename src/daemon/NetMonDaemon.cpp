@@ -7,6 +7,10 @@
 #include <sstream>
 #include <csignal>
 #include "net/PcapAdapter.h"
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+#include <grp.h>
 
 
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
@@ -76,6 +80,22 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     persistence_ = std::make_unique<StatsPersistence>(db_path);
 
     std::cout << "NetMonDaemon initialized with config: " << config_path_ << std::endl;
+
+    if (config["privilege"] && config["privilege"]["drop"] && config["privilege"]["drop"].as<bool>()) {
+        std::string user = config["privilege"]["user"] ? config["privilege"]["user"].as<std::string>() : "nobody";
+        std::string group = config["privilege"]["group"] ? config["privilege"]["group"].as<std::string>() : "nogroup";
+        struct passwd* pw = getpwnam(user.c_str());
+        struct group* gr = getgrnam(group.c_str());
+        if (!pw || !gr) {
+            std::cerr << "[ERROR] Invalid user/group for privilege drop\n";
+            exit(1);
+        }
+        if (setgid(gr->gr_gid) != 0 || setuid(pw->pw_uid) != 0) {
+            std::cerr << "[ERROR] Failed to drop privileges\n";
+            exit(1);
+        }
+        std::cout << "[INFO] Dropped privileges to " << user << ":" << group << std::endl;
+    }
 }
 
 void NetMonDaemon::run()
@@ -212,7 +232,6 @@ void NetMonDaemon::run()
                 res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
             }
         });
-
         svr_.listen("0.0.0.0", 8082);
     });
 
