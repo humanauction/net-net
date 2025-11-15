@@ -212,7 +212,7 @@ See docs/design.md for full architecture.
 
 ### Stage 5 — Qt dashboard and alerts (Estimate: 6–10 days; Actual: Pending)
 
-- Implement QtDashboard: real-time charts using QChart or QCustomPlot.
+- Implemention of QtDashboard: real-time charts using QChart or QCustomPlot.
 
 - Visuals: per-interface bandwidth graph, active connections list, protocol pie chart, alerts panel.
 
@@ -277,7 +277,7 @@ See docs/design.md for full architecture.
 ### Security
 
 - Run capture code with minimal privileges; **drop to unprivileged user/group after opening capture device**.
-- Configure privilege drop in `sample-config.yaml`:
+- Configured privilege drop in `sample-config.yaml`:
 
   ```yaml
   privilege:
