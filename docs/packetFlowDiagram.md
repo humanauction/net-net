@@ -1,6 +1,6 @@
 # Packet Flow Diagram
 
-```
+```mermaid
 flowchart TD
     Start[Network Interface / PCAP File] --> Adapter[PcapAdapter]
     Adapter -->|Raw Packet + PacketMeta| Parser[Parser]

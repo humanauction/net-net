@@ -120,133 +120,138 @@ void NetMonDaemon::run()
     log("info", "NetMonDaemon is running...");
 
     // Start REST API server
-    api_thread_ = std::thread([this]() {
-        svr_.Get("/metrics", [this](const httplib::Request& req, httplib::Response& res) {
-            // TODO: Serialize stats to JSON and set res.body
-            if (!isAuthorized(req)) {
-                logAuthFailure(req);
-                res.status = 401;
-                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-                return;
-            }
-            auto stats = aggregator_->currentStats();
-            std::ostringstream oss;
+    svr_.Get("/metrics", [this](const httplib::Request& req, httplib::Response& res) {
+        // TODO: Serialize stats to JSON and set res.body
+        if (!isAuthorized(req)) {
+            logAuthFailure(req);
+            res.status = 401;
+            res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+            return;
+        }
+        auto stats = aggregator_->currentStats();
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"window_start\":" <<std::chrono::duration_cast<std::chrono::seconds>(stats.window_start.time_since_epoch()).count() << ",";
+        oss << "\"flows\":[";
+        bool first = true;
+        for (const auto& kv : stats.flows) {
+            if (!first) oss << ",";
+            first = false;
+            const auto& key = kv.first;
+            const auto& val = kv.second;
             oss << "{";
-            oss << "\"window_start\":" <<std::chrono::duration_cast<std::chrono::seconds>(stats.window_start.time_since_epoch()).count() << ",";
-            oss << "\"flows\":[";
-            bool first = true;
-            for (const auto& kv : stats.flows) {
-                if (!first) oss << ",";
-                first = false;
-                const auto& key = kv.first;
-                const auto& val = kv.second;
-                oss << "{";
-                oss << "\"iface\":\"" << key.iface << "\",";
-                oss << "\"protocol\":" << key.protocol << ",";
-                oss << "\"src_ip\":\"" << key.src_ip << "\",";
-                oss << "\"src_port\":" << key.src_port << ",";
-                oss << "\"dst_ip\":\"" << key.dst_ip << "\",";
-                oss << "\"dst_port\":" << key.dst_port << ",";
-                oss << "\"bytes_c2s\":" << val.bytes_c2s << ",";
-                oss << "\"pkts_c2s\":" << val.pkts_c2s << ",";
-                oss << "\"bytes_s2c\":" << val.bytes_s2c << ",";
-                oss << "\"pkts_s2c\":" << val.pkts_s2c;
-                oss << "}";
-            }
-            oss << "]";
+            oss << "\"iface\":\"" << key.iface << "\",";
+            oss << "\"protocol\":" << key.protocol << ",";
+            oss << "\"src_ip\":\"" << key.src_ip << "\",";
+            oss << "\"src_port\":" << key.src_port << ",";
+            oss << "\"dst_ip\":\"" << key.dst_ip << "\",";
+            oss << "\"dst_port\":" << key.dst_port << ",";
+            oss << "\"bytes_c2s\":" << val.bytes_c2s << ",";
+            oss << "\"pkts_c2s\":" << val.pkts_c2s << ",";
+            oss << "\"bytes_s2c\":" << val.bytes_s2c << ",";
+            oss << "\"pkts_s2c\":" << val.pkts_s2c;
             oss << "}";
-            res.set_content(oss.str(), "application/json");
-        });
+        }
+        oss << "]";
+        oss << "}";
+        res.set_content(oss.str(), "application/json");
+    });
 
-        svr_.Post("/control/start", [this](const httplib::Request& req, httplib::Response& res) {
-            if (!isAuthorized(req)) {
-                logAuthFailure(req);
-                res.status = 401;
-                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-                return;
-            }
-            auto now = std::chrono::steady_clock::now();
-            auto& last =  last_control_request_["/control/start"];
-            if (now - last < control_rate_limit_) {
-                res.status= 429;
-                res.set_content("{\"error\":\"rate limit exceeded\"}", "application/json");
-                return;
-            }
-            last = now;
-            running_ = true;
-            res.set_content("{\"status\":\"started\"}", "application/json");
-        });
+    svr_.Post("/control/start", [this](const httplib::Request& req, httplib::Response& res) {
+        if (!isAuthorized(req)) {
+            logAuthFailure(req);
+            res.status = 401;
+            res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+            return;
+        }
+        auto now = std::chrono::steady_clock::now();
+        auto& last =  last_control_request_["/control/start"];
+        if (now - last < control_rate_limit_) {
+            res.status= 429;
+            res.set_content("{\"error\":\"rate limit exceeded\"}", "application/json");
+            return;
+        }
+        last = now;
+        running_ = true;
+        res.set_content("{\"status\":\"started\"}", "application/json");
+    });
 
-        svr_.Post("/control/stop", [this](const httplib::Request& req, httplib::Response& res) {
-            if (!isAuthorized(req)) {
-                logAuthFailure(req);
-                res.status = 401;
-                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-                return;
-            }
-            auto now = std::chrono::steady_clock::now();
-            auto& last =  last_control_request_["/control/stop"];
-            if (now - last < control_rate_limit_) {
-                res.status= 429;
-                res.set_content("{\"error\":\"rate limit exceeded\"}", "application/json");
-                return;
-            }
-            last = now;
-            running_ = false;
-            res.set_content("{\"status\":\"stopped\"}", "application/json");
-        });
+    svr_.Post("/control/stop", [this](const httplib::Request& req, httplib::Response& res) {
+        if (!isAuthorized(req)) {
+            logAuthFailure(req);
+            res.status = 401;
+            res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+            return;
+        }
+        auto now = std::chrono::steady_clock::now();
+        auto& last =  last_control_request_["/control/stop"];
+        if (now - last < control_rate_limit_) {
+            res.status= 429;
+            res.set_content("{\"error\":\"rate limit exceeded\"}", "application/json");
+            return;
+        }
+        last = now;
+        running_ = false;
+        res.set_content("{\"status\":\"stopped\"}", "application/json");
+    });
 
-        svr_.Post("/control/reload", [this](const httplib::Request& req, httplib::Response& res) {
-            if (!isAuthorized(req)) {
-                logAuthFailure(req);
-                res.status = 401;
-                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-                return;
-            }
-            try {
-                std::lock_guard<std::shared_mutex> lock(reload_mutex);
-                YAML::Node config = YAML::LoadFile(config_path_);
-                // Re-load token
-                if (!config["api"] || !config["api"]["token"]) throw std::runtime_error("Missing api.token");
-                api_token_ = config["api"]["token"].as<std::string>();
+    svr_.Post("/control/reload", [this](const httplib::Request& req, httplib::Response& res) {
+        if (!isAuthorized(req)) {
+            logAuthFailure(req);
+            res.status = 401;
+            res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+            return;
+        }
+        try {
+            std::lock_guard<std::shared_mutex> lock(reload_mutex);
+            YAML::Node config = YAML::LoadFile(config_path_);
+            // Re-load token
+            if (!config["api"] || !config["api"]["token"]) throw std::runtime_error("Missing api.token");
+            api_token_ = config["api"]["token"].as<std::string>();
 
-                // Re-init PcapAdapter
-                std::string iface_or_file = config["interface"]["name"].as<std::string>();
-                std::string bpf_filter = config["interface"]["bpf_filter"] ? config["interface"]["bpf_filter"].as<std::string>() : "";
-                bool promiscuous = config["interface"]["promiscuous"] ? config["interface"]["promiscuous"].as<bool>() : true;
-                int snaplen = config["interface"]["snaplen"].as<int>();
-                int timeout = config["interface"]["timeout_ms"].as<int>();
-                bool read_offline = config["offline"] && config["offline"]["file"];
-                std::string offline_file = read_offline ? config["offline"]["file"].as<std::string>() : "";
-                PcapAdapter::Options opts;
-                opts.iface_or_file = iface_or_file;      // string: interface or file path
-                opts.bpf_filter    = bpf_filter;         // string: BPF filter expression
-                opts.promiscuous   = promiscuous;        // bool: promiscuous mode
-                opts.snaplen       = snaplen;            // int: snapshot length
-                opts.timeout_ms    = timeout;            // int: timeout in ms
-                opts.read_offline  = read_offline;       // bool: offline mode
+            // Re-init PcapAdapter
+            std::string iface_or_file = config["interface"]["name"].as<std::string>();
+            std::string bpf_filter = config["interface"]["bpf_filter"] ? config["interface"]["bpf_filter"].as<std::string>() : "";
+            bool promiscuous = config["interface"]["promiscuous"] ? config["interface"]["promiscuous"].as<bool>() : true;
+            int snaplen = config["interface"]["snaplen"].as<int>();
+            int timeout = config["interface"]["timeout_ms"].as<int>();
+            bool read_offline = config["offline"] && config["offline"]["file"];
+            std::string offline_file = read_offline ? config["offline"]["file"].as<std::string>() : "";
+            PcapAdapter::Options opts;
+            opts.iface_or_file = iface_or_file;      // string: interface or file path
+            opts.bpf_filter    = bpf_filter;         // string: BPF filter expression
+            opts.promiscuous   = promiscuous;        // bool: promiscuous mode
+            opts.snaplen       = snaplen;            // int: snapshot length
+            opts.timeout_ms    = timeout;            // int: timeout in ms
+            opts.read_offline  = read_offline;       // bool: offline mode
 
-                pcap_ = std::make_unique<PcapAdapter>(opts);
+            pcap_ = std::make_unique<PcapAdapter>(opts);
 
-                // Re-init StatsAggregator
-                int window_size = config["stats"]["window_size"].as<int>();
-                int history_depth = config["stats"]["history_depth"].as<int>();
-                aggregator_ = std::make_unique<StatsAggregator>(std::chrono::seconds(window_size), history_depth);
+            // Re-init StatsAggregator
+            int window_size = config["stats"]["window_size"].as<int>();
+            int history_depth = config["stats"]["history_depth"].as<int>();
+            aggregator_ = std::make_unique<StatsAggregator>(std::chrono::seconds(window_size), history_depth);
 
-                // Re-init StatsPersistence
-                std::string db_path = config["database"]["path"].as<std::string>();
-                persistence_ = std::make_unique<StatsPersistence>(db_path);
+            // Re-init StatsPersistence
+            std::string db_path = config["database"]["path"].as<std::string>();
+            persistence_ = std::make_unique<StatsPersistence>(db_path);
 
-                log("info", "Config reloaded successfully at " + std::to_string(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())));
+            log("info", "Config reloaded successfully at " + std::to_string(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())));
 
-                res.set_content("{\"status\":\"reloaded\"}", "application/json");
-            } catch (const std::exception& ex) {
-                log("error", "[ERROR] Reload failed: " + std::string(ex.what()));
-                res.status = 100;
-                res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
-            }
-        });
-        svr_.listen("0.0.0.0", 8082);
+            res.set_content("{\"status\":\"reloaded\"}", "application/json");
+        } catch (const std::exception& ex) {
+            log("error", "[ERROR] Reload failed: " + std::string(ex.what()));
+            res.status = 100;
+            res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
+        }
+    });
+
+    // Serve static dashboard files
+    svr_.set_mount_point("/", "./www");
+
+    api_thread_ = std::thread([this]() {
+        std::cout << "[INFO] Starting API server on " << api_host_ << ":" << api_port_ << std::endl;
+        svr_.listen(api_host_, api_port_);
     });
 
     // Start packet capture with a callback that feeds packets to StatsAggregator
