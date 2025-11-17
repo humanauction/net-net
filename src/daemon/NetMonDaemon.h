@@ -10,6 +10,7 @@
 #include <chrono>
 #include <unordered_map>
 #include <fstream>
+#include <cstdint>
 // add more here as/when we need/make it (e.g. config, threading, API, etc...)
 
 class NetMonDaemon {
@@ -33,6 +34,8 @@ private:
     std::string config_path_;
     std::thread api_thread_;
     std::string api_token_;
+    std::string api_host_;
+    std::uint16_t api_port_;
     std::unique_ptr<PcapAdapter> pcap_;
     std::unique_ptr<StatsAggregator> aggregator_;
     std::unique_ptr<StatsPersistence> persistence_;
@@ -42,3 +45,5 @@ private:
     bool log_timestamps_ = true;
     std::ofstream log_stream_;
 };
+
+ 

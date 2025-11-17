@@ -83,7 +83,9 @@
         "iomanip": "cpp",
         "regex": "cpp",
         "unordered_set": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "fstream": "cpp",
+        "stack": "cpp"
     },
     "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
     "C_Cpp.default.defines": [
