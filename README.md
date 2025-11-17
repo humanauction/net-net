@@ -232,33 +232,33 @@ See docs/design.md for full architecture.
 
 ## Interfaces and Key Classes (API Sketch)
 
-#### PcapAdapter
+### PcapAdapter
 
 - `start(iface_or_file, bpf_filter, packetCallback)`
 - `stop()`
 
-#### Parser
+### Parser
 
 - `parse(rawPacket) -> PacketMeta`  
     Returns: `{ timestamp, iface, layers... }`
 
-#### ConnectionTracker
+### ConnectionTracker
 
 - `ingest(PacketMeta)`
 - `getActiveConnections() -> std::vector<FlowInfo>`
 
-#### StatsAggregator
+### StatsAggregator
 
 - `ingest(ConnectionEvent)`
 - `getMetrics(window) -> MetricsJson`
 
-#### NetMonDaemon
+### NetMonDaemon
 
 - `loadConfig(path)`
 - `run()`
 - REST API: `/metrics`, `/control/start`, `/control/stop`, `/control/reload` (token required)
 
-#### QtDashboard
+### QtDashboard
 
 - subscribeToMetrics(source)
 
