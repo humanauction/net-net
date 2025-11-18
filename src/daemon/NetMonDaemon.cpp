@@ -14,20 +14,30 @@
 #include <grp.h>
 
 
-
-
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
     : config_path_(config_path)
 {
     YAML::Node config = YAML::LoadFile(config_path_);
-
+    // Logging Level and File Configuration
+    if (config["logging"]) {
+        log_level_ = config["logging"]["level"] ? config["logging"]["level"].as<std::string>() : "info";
+        log_file_ = config["logging"]["file"] ? config["logging"]["file"].as<std::string>() : "";
+        log_timestamps_ = config["logging"]["timestamps"] ? config["logging"]["timestamps"].as<bool>() : true;
+        if (!log_file_.empty()) {
+            log_stream_.open(log_file_, std::ios::app);
+            if (!log_stream_) {
+                log("error", "[ERROR] Could not open log file: " + log_file_);
+                exit(1);
+            }
+        }
+    }
     // API token check
     if (!config["api"] || !config["api"]["token"]) {
         throw std::runtime_error("Config missing 'api.token' required");
     }
     api_token_ = config["api"]["token"].as<std::string>();
-
-    
+    api_host_ = config["api"]["host"] ? config["api"]["host"].as<std::string>() : "localhost";
+    api_port_ = config["api"]["port"] ? config["api"]["port"].as<uint16_t>() : 8080;
 
     // Prioritize offline mode
     bool read_offline = config["offline"] && config["offline"]["file"];
@@ -39,7 +49,6 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
 
     if (read_offline) {
         iface_or_file = config["offline"]["file"].as<std::string>();
-        // Optionally, allow offline-specific options here
         log("info", "Running in offline mode with file: " + iface_or_file);
     } else if (config["interface"] && config["interface"]["name"]) {
         iface_or_file = config["interface"]["name"].as<std::string>();
@@ -48,6 +57,7 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
         snaplen = config["interface"]["snaplen"] ? config["interface"]["snaplen"].as<int>() : 65535;
         timeout = config["interface"]["timeout_ms"] ? config["interface"]["timeout_ms"].as<int>() : 1000;
         log("info", "Running in live mode on interface: " + iface_or_file);
+        
         // BPF filter validation
         if (!bpf_filter.empty() && !isValidBpfFilter(bpf_filter)) {
             throw std::runtime_error("Invalid BPF filter: contains forbidden characters or is too long");
@@ -66,7 +76,6 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     opts.read_offline  = read_offline;
     pcap_ = std::make_unique<PcapAdapter>(opts);
 
-
     // StatsAggregator
     if (!config["stats"] || !config["stats"]["window_size"] || !config["stats"]["history_depth"]) {
         throw std::runtime_error("Missing required 'stats.window_size' or 'stats.history_depth' in config");
@@ -83,10 +92,28 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     persistence_ = std::make_unique<StatsPersistence>(db_path);
 
     log("info", "NetMonDaemon initialized with config: " + config_path_);
-    // Drop privileges
+
+    
+}
+
+void NetMonDaemon::run()
+{
+    running_ = true;
+    log("info", "NetMonDaemon is running...");
+
+    // Start packet capture BEFORE dropping privileges
+    pcap_->startCapture([this](const PacketMeta& meta, const uint8_t* data, size_t len) {
+        ParsedPacket pkt;
+        if (parsePacket(data, len, meta, pkt)) {
+            aggregator_->ingest(pkt);
+        }
+    });
+
+    // Drop privileges AFTER capture device is open
+    YAML::Node config = YAML::LoadFile(config_path_);
     if (config["privilege"] && config["privilege"]["drop"] && config["privilege"]["drop"].as<bool>()) {
         std::string user = config["privilege"]["user"] ? config["privilege"]["user"].as<std::string>() : "nobody";
-        std::string group = config["privilege"]["group"] ? config["privilege"]["group"].as<std::string>() : "nogroup";
+        std::string group = config["privilege"]["group"] ? config["privilege"]["group"].as<std::string>() : "nobody";
         struct passwd* pw = getpwnam(user.c_str());
         struct group* gr = getgrnam(group.c_str());
         if (!pw || !gr) {
@@ -99,25 +126,6 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
         }
         log("info", "Dropped privileges to " + user + ":" + group);
     }
-    // Logging Level and File Configuration
-    if (config["logging"]) {
-        log_level_ = config["logging"]["level"] ? config["logging"]["level"].as<std::string>() : "info";
-        log_file_ = config["logging"]["file"] ? config["logging"]["file"].as<std::string>() : "";
-        log_timestamps_ = config["logging"]["timestamps"] ? config["logging"]["timestamps"].as<bool>() : true;
-        if(!log_file_.empty()) {
-            log_stream_.open(log_file_, std::ios::app);
-            if (!log_stream_) {
-                log("error", "[ERROR] Could not open log file: " + log_file_);
-                exit(1);
-            }
-        }
-    }
-}
-
-void NetMonDaemon::run()
-{
-    running_ = true;
-    log("info", "NetMonDaemon is running...");
 
     // Start REST API server
     svr_.Get("/metrics", [this](const httplib::Request& req, httplib::Response& res) {
@@ -241,7 +249,7 @@ void NetMonDaemon::run()
             res.set_content("{\"status\":\"reloaded\"}", "application/json");
         } catch (const std::exception& ex) {
             log("error", "[ERROR] Reload failed: " + std::string(ex.what()));
-            res.status = 100;
+            res.status = 500;
             res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
         }
     });
@@ -254,38 +262,22 @@ void NetMonDaemon::run()
         svr_.listen(api_host_, api_port_);
     });
 
-    // Start packet capture with a callback that feeds packets to StatsAggregator
-    pcap_->startCapture([this](const PacketMeta& meta, const uint8_t* data, size_t len) {
-        ParsedPacket pkt;
-        if (parsePacket(data, len, meta, pkt)) {
-            aggregator_->ingest(pkt);
-        }
-        // TO DO: handle parse errors/logging
-    });
-    //  Main loop
-    while(NetMonDaemon::running_signal_ && isRunning()) {
-        // Periodically call advanceWindow() and persist stats
+    // Main loop
+    while (NetMonDaemon::running_signal_ && isRunning()) {
         aggregator_->advanceWindow();
         auto stats = aggregator_->currentStats();
         persistence_->saveWindow(stats);
-        // Sleep (or break) logic here
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 
     pcap_->stopCapture();
-    log("info", "✅ Capture complete! API server will remain running for 100 seconds to allow pending requests.");
-    for (int i=0; i < 100 && NetMonDaemon::running_signal_; ++i) {
+    log("info", "Capture complete! API server will remain running for 100 seconds.");
+    for (int i = 0; i < 100 && NetMonDaemon::running_signal_; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     
     // When running_ is set to false (e.g., via /control/stop), exit and clean up
     stop();
-
-    // During manual testing use:
-    log("info", "Capture complete! Press Ctrl+C to exit.");
-    while (true) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
 }
 
 void NetMonDaemon::stop()

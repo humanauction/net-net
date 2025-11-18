@@ -19,6 +19,7 @@ BUILD_DIR=build
 DAEMON=$(BUILD_DIR)/netnet-daemon
 CONFIG=examples/sample-config.yaml
 PCAP=tests/fixtures/sample.pcap
+ICMP=tests/fixtures/icmp.pcap
 
 all: build test
 
@@ -30,8 +31,8 @@ venv:
 	$(PIP) install -r requirements.txt || true
 
 build:
-	cmake -S . -B $(BUILD_DIR)
-	$(MAKE) -C $(BUILD_DIR)
+	cmake -S . -B build -G "Unix Makefiles"
+	cmake --build build
 
 run-daemon-%:
 	$(DAEMON) --config examples/$*.yaml

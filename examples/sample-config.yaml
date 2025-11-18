@@ -5,7 +5,7 @@
 interface:
   # Interface to capture from (e.g., en0, eth0, wlan0)
   # Use "any" to capture from all interfaces (Linux only)
-  name: "en0"
+  name: "en0" # or "lo0" for localhost
   
   # Promiscuous mode: capture all packets on the network segment
   promiscuous: true
