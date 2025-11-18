@@ -20,8 +20,8 @@ interface:
 
 # Offline Capture Mode (optional)
 # Uncomment to read from pcap file instead of live capture
-offline:
-  file: "/Users/guns4kids/Documents/vscode-projects/net-net/tests/fixtures/icmp_sample.pcap"
+# offline:
+#   file: "/Users/guns4kids/Documents/vscode-projects/net-net/tests/fixtures/icmp_sample.pcap"
 
 # BPF Filter (Berkeley Packet Filter)
 # Syntax: https://www.tcpdump.org/manpages/pcap-filter.7.html
@@ -29,7 +29,7 @@ filter:
   # Example filters (uncomment one):
   
   # Capture only icmp traffic
-  bpf: "icmp"
+  # bpf: "icmp"
 
   # Capture only TCP traffic
   # bpf: "tcp"
@@ -47,7 +47,7 @@ filter:
   # bpf: "not tcp port 22"
   
   # No filter (capture everything)
-  # bpf: ""
+  bpf: ""
 
 # Connection Tracking
 tracking:
