@@ -37,7 +37,7 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     }
     api_token_ = config["api"]["token"].as<std::string>();
     api_host_ = config["api"]["host"] ? config["api"]["host"].as<std::string>() : "localhost";
-    api_port_ = config["api"]["port"] ? config["api"]["port"].as<uint16_t>() : 8080;
+    api_port_ = config["api"]["port"] ? config["api"]["port"].as<uint16_t>() : 8082;
 
     // Prioritize offline mode
     bool read_offline = config["offline"] && config["offline"]["file"];

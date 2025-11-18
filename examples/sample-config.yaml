@@ -101,7 +101,7 @@ logging:
 privilege:
   drop: true
   user: "nobody"
-  group: "nogroup"
+  group: "nobody"
 
 # Performance Tuning
 performance:
