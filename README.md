@@ -116,7 +116,7 @@ make run-daemon-online  # Requires elevated privileges for packet capture
 ```
 
 Open your browser and navigate to:  
-**http://localhost:8080**
+**<http://localhost:8080>**
 
 ## Configuration
 
@@ -214,7 +214,7 @@ See docs/design.md for full architecture.
 - Configurable logging (level, file, timestamps).
 - Tests: integration tests for REST endpoints; security review checklist. See: `docs/securityChecklistReview.md` for details.
 
-### Stage 5 — Qt dashboard and alerts (Estimate: 6–10 days; Actual: Pending)
+### Stage 5 — Qt dashboard and alerts (Estimate: 6–10 days; Actual: In Progress)
 
 - Implement web-based dashboard using HTML/CSS/JavaScript (D3.js for visualizations).
 - Dashboard served via REST API server at `/` (static files in `www/`).
@@ -296,6 +296,7 @@ See docs/design.md for full architecture.
 10 ICMP echo request/reply packets captured from localhost.
 
 **To regenerate:**
+
 ```bash
 sudo tcpdump -i lo0 -w tests/fixtures/icmp_sample.pcap &
 ping -c 5 127.0.0.1
@@ -303,6 +304,7 @@ sudo killall tcpdump
 ```
 
 **To inspect:**
+
 ```bash
 tcpdump -nnr tests/fixtures/icmp_sample.pcap
 tcpdump -xx -r tests/fixtures/icmp_sample.pcap
@@ -313,11 +315,13 @@ tcpdump -xx -r tests/fixtures/icmp_sample.pcap
 10 TCP SYN packets from 10.0.0.1:1234 to 10.0.0.2:80 (synthetic, for integration tests).
 
 **To regenerate:**
+
 ```bash
 sudo tcpdump -i lo0 tcp and host 10.0.0.1 and port 80 -c 10 -w tests/fixtures/sample.pcap
 ```
 
 **To inspect:**
+
 ```bash
 tcpdump -nnr tests/fixtures/sample.pcap
 tcpdump -xx -r tests/fixtures/sample.pcap

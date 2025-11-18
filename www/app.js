@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8080';
+const API_BASE = 'http://localhost:8082';
 const API_TOKEN = 'your_api_token_here';
 
 let bandwidthData = [];

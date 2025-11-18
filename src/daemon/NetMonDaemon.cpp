@@ -13,7 +13,6 @@
 #include <pwd.h>
 #include <grp.h>
 
-
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
     : config_path_(config_path)
 {
@@ -129,18 +128,21 @@ void NetMonDaemon::run()
 
     // Start REST API server
     svr_.Get("/metrics", [this](const httplib::Request& req, httplib::Response& res) {
-        // TODO: Serialize stats to JSON and set res.body
         if (!isAuthorized(req)) {
             logAuthFailure(req);
             res.status = 401;
             res.set_content("{\"error\":\"unauthorized\"}", "application/json");
             return;
         }
+
         auto stats = aggregator_->currentStats();
         std::ostringstream oss;
         oss << "{";
         oss << "\"window_start\":" <<std::chrono::duration_cast<std::chrono::seconds>(stats.window_start.time_since_epoch()).count() << ",";
-        oss << "\"flows\":[";
+        oss << "\"total_bytes\":0,";  // TODO: Calculate total from flows
+        oss << "\"total_packets\":0,";  // TODO: Calculate total from flows
+        oss << "\"active_flows\":[";
+
         bool first = true;
         for (const auto& kv : stats.flows) {
             if (!first) oss << ",";
@@ -149,19 +151,19 @@ void NetMonDaemon::run()
             const auto& val = kv.second;
             oss << "{";
             oss << "\"iface\":\"" << key.iface << "\",";
-            oss << "\"protocol\":" << key.protocol << ",";
             oss << "\"src_ip\":\"" << key.src_ip << "\",";
             oss << "\"src_port\":" << key.src_port << ",";
             oss << "\"dst_ip\":\"" << key.dst_ip << "\",";
             oss << "\"dst_port\":" << key.dst_port << ",";
-            oss << "\"bytes_c2s\":" << val.bytes_c2s << ",";
-            oss << "\"pkts_c2s\":" << val.pkts_c2s << ",";
-            oss << "\"bytes_s2c\":" << val.bytes_s2c << ",";
-            oss << "\"pkts_s2c\":" << val.pkts_s2c;
+            oss << "\"protocol\":\"" << (key.protocol == 6 ? "TCP" : key.protocol == 17 ? "UDP" : "OTHER") << "\",";
+            oss << "\"bytes\":" << (val.bytes_c2s + val.bytes_s2c) << ",";
+            oss << "\"packets\":" << (val.pkts_c2s + val.pkts_s2c) << ",";
+            oss << "\"state\":\"active\"";
             oss << "}";
         }
         oss << "]";
         oss << "}";
+
         res.set_content(oss.str(), "application/json");
     });
 
