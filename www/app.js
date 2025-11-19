@@ -1,5 +1,10 @@
 const API_BASE = 'http://localhost:8082';
-const API_TOKEN = 'your_api_token_here';
+
+let API_TOKEN = localStorage.getItem('api_token');
+if (!API_TOKEN) {
+    API_TOKEN = prompt("Enter API Token:");
+    localStorage.setItem('api_token', API_TOKEN);
+}
 
 let bandwidthData = [];
 const svgWidth = 600, svgHeight = 300;
