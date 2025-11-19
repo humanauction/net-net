@@ -40,6 +40,7 @@ net-net/
 │  └─ app.js
 ├─ include/
 │  └─ net-net/   (public headers for library usage)
+│     └─ vendor/  (third-party headers, e.g., bcrypt)
 ├─ tests/
 │  ├─ fixtures/
 │  │  ├─ icmp_sample.pcap   
