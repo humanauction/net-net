@@ -8,7 +8,7 @@ namespace bcrypt {
     std::string hash(const std::string& password);
 
     // Verify password against bcrypt hash
-    bool verift(const std::string& password, const std::string& hash);
+    bool verify(const std::string& password, const std::string& hash);
 }
 
 #endif // BCRYPT_H
