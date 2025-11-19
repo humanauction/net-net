@@ -40,7 +40,11 @@ net-net/
 │  └─ app.js
 ├─ include/
 │  └─ net-net/   (public headers for library usage)
-│     └─ vendor/  (third-party headers, e.g., bcrypt)
+│     └─ vendor/  (third-party headers, e.g. bcrypt)
+│        ├─ bcrypt.h
+│        ├─ bcrypt.cpp
+│        ├─ uuid_gen.h   
+│        └─ uuid_gen.cpp
 ├─ tests/
 │  ├─ fixtures/
 │  │  ├─ icmp_sample.pcap   
