@@ -42,10 +42,10 @@ void SessionManager::initDatabase() {
     )";
 
     char* err_msg = nullptr;
-    if (sqlite3_exec(db_, sql, nullptr, nullptr, &err_msg) != SQLITE_OK {
+    if (sqlite3_exec(db_, sql, nullptr, nullptr, &err_msg) != SQLITE_OK) {
         std::string error = "Failed to create sessions table: " + std::string(err_msg);
         sqlite3_free(err_msg);
-        throw std::runtime_error(error)
+        throw std::runtime_error(error);
     }
 }
 
@@ -59,7 +59,7 @@ std::string SessionManager::createSession(const std::string& username, const std
 
     // Get current time as Unix timestamp (seconds since epoch)
     auto now = std::chrono::system_clock::now();
-    auto timestamp = std::chrono::system_clock::to_time_t(now);
+    auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
 
     // Prepare parameterized SQL insert (prevents SQL injection)
     const char* sql = "INSERT INTO sessions (token, username, created_at, last_activity, ip_address) VALUES (?, ?, ?, ?, ?);";
@@ -96,4 +96,72 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
     auto now_timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
 
     // Query Session by Token
+    const char* sql = "SELECT username, created_at, last_activity, ip_address FROM sessions WHERE token = ?";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false; // DB error
+    }
+    sqlite3_bind_text(stmt, 1, token.c_str(), -1, SQLITE_TRANSIENT);
+
+    bool valid = false;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        int64_t last_activity_ts = sqlite3_column_int64(stmt, 2);
+
+        // Check for expired session (current time - last_activity > expiry_seconds)
+        if (now_timestamp -  last_activity_ts <= expiry_seconds_) {
+            // Session is valid - populate output data
+            out_data.token = token;
+            out_data.username = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            out_data.created_at = std::chrono::system_clock::from_time_t(sqlite3_column_int64(stmt, 1));
+            out_data.last_activity = std::chrono::system_clock::from_time_t(last_activity_ts);
+            out_data.ip_address = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+
+            // Update last_activity to current time (session activity tracking)
+            sqlite3_finalize(stmt);
+            const char* update_sql = "UPDATE sessions SET last_activity = ? WHERE token = ?";
+            sqlite3_stmt* update_stmt = nullptr;
+            if (sqlite3_prepare_v2(db_, update_sql, -1, &update_stmt, nullptr) == SQLITE_OK) {
+                sqlite3_bind_int64(update_stmt, 1, now_timestamp);
+                sqlite3_bind_text(update_stmt, 2, token.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(update_stmt);
+                sqlite3_finalize(update_stmt);
+            }
+            valid = true;
+        }
+    } else {
+        sqlite3_finalize(stmt);
+    }
+
+    if (!valid) {
+        sqlite3_finalize(stmt);
+    }
+    return valid;
+}
+// Deletes a session (called on logout)
+// token: Session token to invalidate
+void SessionManager::deleteSession(const std::string& token) {
+    const char* sql = "DELETE FROM sessions WHERE token = ?";
+    sqlite3_stmt* stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, token.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+    }
+}
+
+// Removes expired sessions from database (should be called periodically)
+// Deletes all sessions where (current_time - last_activity) > expiry_seconds
+void SessionManager::cleanupExpired() {
+    auto now = std::chrono::system_clock::now();
+    auto cutoff = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count() - expiry_seconds_;
+
+    const char* sql = "DELETE FROM sessions WHERE last_activity < ?";
+    sqlite3_stmt* stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int64(stmt, 1, cutoff);  // Only bind the cutoff timestamp
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+    }
 }
