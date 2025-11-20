@@ -23,6 +23,8 @@ net-net/
 │  │  ├─ StatsAggregator.h
 │  │  ├─ StatsPersistence.cpp
 │  │  ├─ StatsPersistence.h
+│  │  ├─ SessionManager.cpp
+│  │  ├─ SessionManager.h
 │  │  └─ Utils.h
 │  ├─ net/
 │  │  ├─ PcapAdapter.cpp
