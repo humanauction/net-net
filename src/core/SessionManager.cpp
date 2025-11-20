@@ -1,0 +1,99 @@
+#include "SessionManager.h"
+#include "../../include/net-net/vendor/uuid_gen.h"
+#include <stdexcept>
+#include <ctime>
+
+// Constructor: Opens SQLite database and initializes session table
+// db_path: Path to SQLite database file (e.g., "/tmp/netnet_sessions.db")
+// expiry_seconds: How long sessions remain valid without activity (default: 3600s = 1 hour)
+SessionManager::SessionManager(const std::string& db_path, int expiry_seconds) : db_(nullptr), expiry_seconds_(expiry_seconds) {
+    // Open database connection
+    if (sqlite3_open(db_path.c_str(), &db_) != SQLITE_OK) {
+        throw std::runtime_error("Failed to open session database: " + std::string(sqlite3_errmsg(db_)));
+    }
+    // Create sessions table if none exists
+    initDatabase();
+}
+
+// Destructor: Clean up database connection
+SessionManager::~SessionManager() {
+    if (db_) {
+        sqlite3_close(db_);
+    }
+}
+
+// Creates the sessions table and index for efficient expired session cleanup
+void SessionManager::initDatabase() {
+    // SQL to create sessions table (idempotent - only creates if not exists)
+            // token: UUID v4 session identifier (primary key)
+            // username: User who owns this session
+            // created_at: Unix timestamp when session was created
+            // last_activity: Unix timestamp of last validated request (updated on each API call)
+            // ip_address: Client IP for forensic logging
+    const char* sql = R"(
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            last_activity INTEGER NOT NULL,
+            ip_address TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_last_activity ON sessions(last_activity);
+    )";
+
+    char* err_msg = nullptr;
+    if (sqlite3_exec(db_, sql, nullptr, nullptr, &err_msg) != SQLITE_OK {
+        std::string error = "Failed to create sessions table: " + std::string(err_msg);
+        sqlite3_free(err_msg);
+        throw std::runtime_error(error)
+    }
+}
+
+// Creates a new session after successful login
+// username: Authenticated user
+// ip: Client IP address for forensic trail
+// Returns: UUID session token to send to client
+std::string SessionManager::createSession(const std::string& username, const std::string& ip) {
+    // GENERATE RANDOM UUID TOKEN (V4. 36-char string)
+    std::string token = uuid_gen::generate();
+
+    // Get current time as Unix timestamp (seconds since epoch)
+    auto now = std::chrono::system_clock::now();
+    auto timestamp = std::chrono::system_clock::to_time_t(now);
+
+    // Prepare parameterized SQL insert (prevents SQL injection)
+    const char* sql = "INSERT INTO sessions (token, username, created_at, last_activity, ip_address) VALUES (?, ?, ?, ?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare insert session statement: " + std::string(sqlite3_errmsg(db_)));
+    }
+
+    // Bind parameters to placeholders (? in SQL)
+    // SQLITE_TRANSIENT tells SQLite to make a copy of the string data
+    sqlite3_bind_text(stmt, 1, token.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, username.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 3, timestamp);  // created_at
+    sqlite3_bind_int64(stmt, 4, timestamp);  // last_activity (same as created_at initially)
+    sqlite3_bind_text(stmt, 5, ip.c_str(), -1, SQLITE_TRANSIENT);
+    
+    // Execute the insert
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        sqlite3_finalize(stmt);
+        throw std::runtime_error("Failed to insert new session: " + std::string(sqlite3_errmsg(db_)));
+    }
+    sqlite3_finalize(stmt);
+    return token; // Return token to send to client (via JSON response)
+}
+
+// Validates a session token and updates last_activity timestamp
+// token: Session token from client's Authorization header
+// out_data: Output parameter - filled with session details if valid
+// Returns: true if session exists and hasn't expired, false otherwise
+
+bool SessionManager::validateSession(const std::string& token, SessionData& out_data) {
+    auto now = std::chrono::system_clock::now();
+    auto now_timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+
+    // Query Session by Token
+}
