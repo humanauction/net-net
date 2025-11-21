@@ -231,16 +231,38 @@ void NetMonDaemon::run()
         std::string username = body.substr(username_start, username_end - username_start);
 
         // Extract password
-        
+        size_t password_start = body.find(":", password_pos) +2;
+        size_t password_end = body.find("\"", password_start;
+        std::string password = body.substr(password_start, password_end - password_start);
+
         // Validate credentials
+        auto it = user_credentials_.find(username);
+        if (it == user_credentials_.end()) {
+            log("warning", "User does not exist: " + username);
+            res.status = 401;
+            res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
+            return;
+        }
 
         // Verify password against bcrypt hash
+        if (!bcrypt::verify(password, it->second)) {
+            log("warning", "Ogin attempt failed for: " + username);
+            res.status = 401;
+            res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
+            return;
+        }
 
         // Get client IP for session tracking
+        std::string client_ip = req.remote_addr;
 
         // Create session
-
+        try {
+            
             // Return session token
+        } catch () {
+
+        }
+            
 });
 
     // Start/Stop/Reload control endpoints
