@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 #include <memory>
-// #include <mutex>
+#include "core/SessionManager.h"
 #include "core/StatsAggregator.h"
 #include "core/StatsPersistence.h"
 #include "net/PcapAdapter.h"
@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <cstdint>
+#include <map>
 // add more here as/when we need/make it (e.g. config, threading, API, etc...)
 
 class NetMonDaemon {

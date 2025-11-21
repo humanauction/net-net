@@ -19,6 +19,22 @@
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
     : config_path_(config_path)
 {
+    /*
+     * Initialization Order (CRITICAL - do not reorder):
+     * 1. Load config (YAML)
+     * 2. Initialize logging
+     * 3. Validate API token
+     * 4. Initialize database/persistence
+     * 5. Load and hash user credentials (requires file access)
+     * 6. Initialize SessionManager (requires database access)
+     * 7. Initialize PcapAdapter (requires root for live capture)
+     * 
+     * Then in run():
+     * 8. Start packet capture (requires root)
+     * 9. Drop privileges (AFTER capture device is open)
+     * 10. Start API server (runs as unprivileged user)
+     */
+
     YAML::Node config = YAML::LoadFile(config_path_);
     // Logging Level and File Configuration
     if (config["logging"]) {
@@ -95,7 +111,7 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
 
     // Load user credentials and hash passwords
     if (config["users"]) {
-        for (const auto& usee : config["users"]) {
+        for (const auto& user : config["users"]) {
             std::string username = user["username"].as<std::string>();
             std::string plaintext_password = user["password"].as<std::string>();
         
@@ -110,6 +126,16 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     } else {
         log("warning", "authentication disabled - no user defined in config");
     }
+
+    // Initialize session manager
+    std::string session_db_path = db_path + ".sessions";
+    int session_expiry = 3600;
+    if (config["api"]["session_expiry"]) {
+        session_expiry = config["api"]["session_expiry"].as<int>();
+    }
+    session_manager_ = std::make_unique<SessionManager>(session_db_path, session_expiry);
+
+    log("info", "Session manager initialized (expiry: " + std::to_string(session_expiry) + "s)");
 
     log("info", "NetMonDaemon initialized with config: " + config_path_);
 }
@@ -186,6 +212,38 @@ void NetMonDaemon::run()
         res.set_content(oss.str(), "application/json");
     });
 
+    // TODO: Login endpoint - authenticate user and create session
+    svr_.Post("/login", [this](const httplib::Request& req, httplib::Response& res) {
+        // Parse JSON request body
+        std::string body = req.body;
+        size_t username_pos = body.find("\"username\"");
+        size_t password_pos = body.find("\"password\"");
+
+        if (username_pos == std::string::npos || password_pos == std::string::npos) {
+            res.status = 400;
+            res.set_content("{\"error\":\"missing username or password\"}", "application/json");
+            return;
+        }
+
+        // Extract username (simple JSON parsing - production should use library)
+        size_t username_start = body.find(":", username_pos) + 2; // Skip : and "
+        size_t username_end = body.find("\"", username_start);
+        std::string username = body.substr(username_start, username_end - username_start);
+
+        // Extract password
+        
+        // Validate credentials
+
+        // Verify password against bcrypt hash
+
+        // Get client IP for session tracking
+
+        // Create session
+
+            // Return session token
+});
+
+    // Start/Stop/Reload control endpoints
     svr_.Post("/control/start", [this](const httplib::Request& req, httplib::Response& res) {
         if (!isAuthorized(req)) {
             logAuthFailure(req);
