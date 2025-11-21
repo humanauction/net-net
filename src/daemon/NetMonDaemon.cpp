@@ -124,7 +124,7 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
             log("info", "Loaded User: " + username);
         }
     } else {
-        log("warning", "authentication disabled - no user defined in config");
+        log("warn", "authentication disabled - no user defined in config");
     }
 
     // Initialize session manager
@@ -238,7 +238,7 @@ void NetMonDaemon::run()
         // Validate credentials
         auto it = user_credentials_.find(username);
         if (it == user_credentials_.end()) {
-            log("warning", "User does not exist: " + username);
+            log("warn", "User does not exist: " + username);
             res.status = 401;
             res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
             return;
@@ -246,7 +246,7 @@ void NetMonDaemon::run()
 
         // Verify password against bcrypt hash
         if (!bcrypt::verify(password, it->second)) {
-            log("warning", "Ogin attempt failed for: " + username);
+            log("warn", "Ogin attempt failed for: " + username);
             res.status = 401;
             res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
             return;
@@ -257,10 +257,22 @@ void NetMonDaemon::run()
 
         // Create session
         try {
-            
-            // Return session token
-        } catch () {
+            std::string token = session_manager_->createSession(username, client_ip);
 
+            log("info", "Logged in user: " + username + "from" + client_ip);
+            // Return session token
+            std::ostringstream oss;
+            oss << "{";
+            oss << "\"token\":\"" << token << "\",";
+            oss << "\"username\":\"" << username << "\",";
+            oss << "\"expires_in\":" << 3600;  // TODO: Get from config
+            oss << "}";
+
+            res.set_content(oss.str(), "application/json");
+        } catch (std::exception& ex) {
+            log("error", "Create Session FAILED: " + std::string(ex.what()));
+            res.status = 500;
+            res.set_content("{\"error\":\"session creation failed\"}", "application/json");
         }
             
 });
