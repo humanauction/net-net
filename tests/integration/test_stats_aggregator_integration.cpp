@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
-#include "StatsAggregator.h"
-#include "Parser.h"
+#include "core/ConnectionTracker.h"
+#include "core/StatsAggregator.h"
+#include "core/Parser.h"
 #include <pcap/pcap.h>
 #include <vector>
 #include <string>

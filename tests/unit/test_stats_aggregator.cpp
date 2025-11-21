@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "StatsAggregator.h"
-#include "Parser.h"
+#include "core/StatsAggregator.h"
+#include "core/Parser.h"
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <cstring>

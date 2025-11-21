@@ -1,4 +1,4 @@
-#include "SessionManager.h"
+#include "core/SessionManager.h"
 #include "../../include/net-net/vendor/uuid_gen.h"
 #include <stdexcept>
 #include <ctime>

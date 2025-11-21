@@ -2,8 +2,8 @@
 #include <chrono>
 #include <unordered_map>
 #include <vector>
-#include "ConnectionTracker.h"
-#include "parser.h"
+#include "core/ConnectionTracker.h"
+#include "core/Parser.h"
 
 // Aggregated stats for a time window
 struct AggregatedStats {

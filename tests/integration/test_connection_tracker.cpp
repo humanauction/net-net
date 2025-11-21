@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "Parser.h"
-#include "ConnectionTracker.h"
+#include "core/Parser.h"
+#include "core/ConnectionTracker.h"
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <cstring>
