@@ -111,3 +111,7 @@ doxygen_warnings.txt
 __pycache__/
 *.pyc
 tests/integration/__pycache__/
+
+# Sessions Databases
+*.sessions
+*.sessions-*

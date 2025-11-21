@@ -94,6 +94,8 @@ net-net/
 - Connection tracking with simple state machine.
 - Per-interface, per-protocol bandwidth statistics.
 - Configurable sampling and aggregation windows.
+- Session-based authentication with bcrypt password hashing.
+- User login/logout via REST API.
 - Web-based dashboard with live charts and alerts (D3.js).
 - CLI daemon mode for headless deployments.
 
@@ -170,64 +172,98 @@ Development broken down into 6 stages, each divided into several tasks. See stag
 
 ### Stage 0 — Planning and design (Estimate: 2–3 days. Actual: 10 days)
 
-See docs/design.md for full architecture.
+**Completed:**
 
-- Deliverables: `design.md` with data model, packet flow, modules, public API.
-- Entity-relationship diagram and packet flow diagram.
-- Decide capture backend (libpcap) and privilege model.
+- ✅ Architecture design documented in `docs/design.md`
+- ✅ Entity-relationship diagram created
+- ✅ Packet flow diagram created
+- ✅ Capture backend selected (libpcap)
+- ✅ Privilege drop model designed
+- ✅ Config schema defined (YAML): interfaces, samplingInterval, aggregationWindow, alertRules
+- ✅ Design review checklist completed
 
-- Define config schema (YAML): interfaces, samplingInterval, aggregationWindow, alertRules.
+See [`docs/design.md`](docs/design.md) for full architecture.
 
-- Tests: design review checklist.
+---
 
 ### Stage 1 — Core capture and adapter layer (Estimate: 4–6 days. Actual: 5 days)
 
-- Implement `PcapAdapter` (wrapper around libpcap) with clean, testable interface.
+**Completed:**
 
-- Implement RawSocketAdapter only if targeting platforms without libpcap.
-- BPF filter validation and sanitization.
-- API: `startCapture(interface, callback)`, `stopCapture()`, `setFilter(bpf)`.
+- ✅ Implemented `PcapAdapter` wrapper around libpcap
+- ✅ BPF filter validation and sanitization
+- ✅ Clean, testable API: `startCapture()`, `stopCapture()`, `setFilter()`
+- ✅ Unit tests with mocked adapter
+- ✅ Integration test capturing from pcap file
+- ✅ Test fixtures: [`icmp_sample.pcap`](tests/fixtures/icmp_sample.pcap), [`sample.pcap`](tests/fixtures/sample.pcap)
 
-- Tests: unit tests mocking adapter; integration test capturing from pcap file (see: [sample.pcap](tests/fixtures/sample.pcap)). Quick Start packet scripts: [regenerate](#samplepcap) localhost ICMP packets.
+**Note:** RawSocketAdapter deferred (libpcap sufficient for target platforms).
+
+---
 
 ### Stage 2 — Parser and connection tracker (Estimate: 6–8 days; Actual: 4 days)
 
-- Implement `Parser` for Ethernet -> IPv4/IPv6 -> Transport (TCP/UDP/ICMP).
+**Completed:**
 
-- Implement `ConnectionTracker`: tracks flows by 5-tuple, timestamps, simple state (established, closed, idle).
+- ✅ Implemented `Parser` for Ethernet → IPv4/IPv6 → TCP/UDP/ICMP
+- ✅ Implemented `ConnectionTracker` with 5-tuple flow tracking
+- ✅ Connection state tracking (established, closed, idle)
+- ✅ Per-flow and per-interface throughput counters
+- ✅ Unit tests for packet parsing
+- ✅ Integration tests with synthetic pcap files
 
-- Implement throughput counters per flow and per interface.
-
-- Tests: unit tests for parsing sample packets; synthetic pcap files to validate flow assembly.
+---
 
 ### Stage 3 — Stats aggregation and persistence (Estimate: 4–6 days; Actual: 5 days)
 
-- Implement `StatsAggregator` which consumes parsed events and outputs rolling-window metrics.
+**Completed:**
 
-- Support configurable windows: 1s, 10s, 60s.
+- ✅ Implemented `StatsAggregator` for rolling-window metrics
+- ✅ Configurable aggregation windows (1s, 10s, 60s)
+- ✅ In-memory ring buffer for real-time data
+- ✅ SQLite-backed persistence for historical queries
+- ✅ Unit tests for aggregation math
+- ✅ Integration tests with recorded pcap simulation
 
-- Provide an in-memory ring buffer and disk-backed persistence (SQLite) for historical queries.
+---
 
-- Tests: unit tests for aggregation maths; integration test verifying outputs over recorded pcap simulation.
+### Stage 4 — CLI daemon + REST API (Estimate:5–7 days; Actual: 9 days)
 
-### Stage 4 — CLI daemon + REST API (Estimate:5–7 days; Actual: 7 days)
+- ✅ Implement `NetMonDaemon` to run headless.
+- ✅ Add REST API (cpp-httplib) for metrics and control endpoints.
+- ✅ Add authentication token for API access.
+- ✅ Implement rate limiting for control endpoints.
+- ✅ Implement privilege drop after opening capture device.
+- ✅ Configurable logging (level, file, timestamps).
+- ✅ **Session management with bcrypt authentication**
+- ✅ **User login/logout endpoints**
+- ✅ **Session token validation middleware**
 
-- Implement `NetMonDaemon` to run headless.
+---
 
-- Add a small REST API (cpp-httplib) to expose metrics JSON and simple control endpoints (`/control/start`, `/control/stop`, `/control/reload`).
-- Add authentication token for API access.
-- Implement rate limiting for control endpoints.
-- Implement privilege drop after opening capture device.
-- Configurable logging (level, file, timestamps).
-- Tests: integration tests for REST endpoints; security review checklist. See: `docs/securityChecklistReview.md` for details.
+### Stage 5 — Web dashboard and authentication UI (Estimate: 6–10 days; Actual: In Progress)
 
-### Stage 5 — Qt dashboard and alerts (Estimate: 6–10 days; Actual: In Progress)
+**Completed:**
 
-- Implement web-based dashboard using HTML/CSS/JavaScript (D3.js for visualizations).
-- Dashboard served via REST API server at `/` (static files in `www/`).
-- Visuals: per-interface bandwidth graph, active connections list, protocol pie chart, alerts panel.
-- Alerts: threshold rules trigger UI highlight and send webhook on critical events.
-- Tests: manual UI acceptance tests; unit tests for alert logic.
+- ✅ Web-based dashboard using HTML/CSS/JavaScript
+- ✅ Dashboard served via REST API at `/` (static files)
+- ✅ Backend session management and authentication
+
+**In Progress:**
+
+- 🔄 Frontend login form
+- 🔄 Session token storage (localStorage)
+- 🔄 Authenticated API requests with X-Session-Token header
+- 🔄 Logout button and session expiry handling
+
+**Pending:**
+
+- ⏳ Real-time bandwidth visualization (D3.js)
+- ⏳ Active connections table
+- ⏳ Protocol breakdown charts
+- ⏳ Alert threshold configuration UI
+
+---
 
 ### Stage 6 — Hardening, CI, docs and deployment (Estimate: 3–5 days; Actual: Pending)
 
@@ -238,6 +274,8 @@ See docs/design.md for full architecture.
 - Add Dockerfile for daemon mode.
 
 - Finalize docs, example configs, concise README.
+
+---
 
 ## Interfaces and Key Classes (API Sketch)
 
@@ -274,6 +312,8 @@ See docs/design.md for full architecture.
 - Fetches data from REST API (`/metrics`)
 - Interactive UI for alerts and connection tracking
 
+---
+
 ## Testing, security, deployment, future development, notes (mostly to self)
 
 ### Testing
@@ -295,6 +335,8 @@ See docs/design.md for full architecture.
 
 - Docker for daemon mode with `CAP_NET_RAW` capability.
 - Web dashboard accessible via any modern browser.
+
+---
 
 ## Test Fixtures
 
