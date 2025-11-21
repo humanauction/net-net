@@ -21,6 +21,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor)
 
 # Core library
 add_library(netnet-core STATIC
+    src/core/Connectiontracker.cpp
+    src/core/Parser.cpp
+    src/core/PcapAdapter.cpp
+    src/core/SessionManager.cpp
+    src/core/StatsAggregator.cpp
+    src/core/StatsPersistence.cpp
+    include/net-net/vendor/bcrypt.cpp
+    include/net-net/vendor/uuid_gen.cpp
 )
 
 target_include_directories(netnet-core
@@ -29,16 +37,27 @@ target_include_directories(netnet-core
     PRIVATE
         ${PCAP_INCLUDE_DIRS}
         ${SQLITE3_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor    
 )
 
 target_link_libraries(netnet-core
     PRIVATE
         ${PCAP_LIBRARIES}
+        ${SQLITE3_LIBRARIES}
+        OpenSSL::SSL
+        OpenSSL::Crypto        
         pthread
 )
 
 # Main executable (for testing)
 add_executable(netnet
+    src/main.cpp
+    src/core/Connectiontracker.cpp
+    src/core/Parser.cpp
+    src/core/PcapAdapter.cpp
+    src/core/SessionManager.cpp
+    src/core/StatsAggregator.cpp
+    src/core/StatsPersistence.cpp
 )
 
 target_include_directories(netnet
@@ -55,13 +74,43 @@ target_link_libraries(netnet
         ${SQLITE3_LIBRARIES}
 )
 
-# Testing setup (unchanged)
+# Testing setup
 enable_testing()
 find_package(GTest REQUIRED)
-# ... test targets unchanged ...
+
 
 # API daemon executable
 add_executable(netnet-daemon
+)
+
+# Test runner
+add_executable(test_runner tests/unit/test_pcap_adapter.cpp)
+target_link_libraries(test_runner PRIVATE netnet-core GTest::gtest GTest::gtest_main pthread)
+
+# TEST Parser
+add_executable(test_parser tests/unit/test_parser.cpp src/core/parser.cpp)
+target_include_directories(test_parser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_parser PRIVATE GTest::gtest GTest::gtest_main)
+
+# TEST Connection Tracker
+add_executable(test_connection_tracker tests/integration/test_connection_tracker.cpp src/core/parser.cpp src/core/ConnectionTracker.cpp)
+target_include_directories(test_connection_tracker PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_connection_tracker PRIVATE GTest::gtest GTest::gtest_main pthread)
+
+# TEST Stats Aggregator
+add_executable(test_stats_aggregator tests/unit/test_stats_aggregator.cpp src/core/StatsAggregator.cpp src/core/parser.cpp src/core/ConnectionTracker.cpp)
+target_include_directories(test_stats_aggregator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_stats_aggregator PRIVATE GTest::gtest GTest::gtest_main pthread)
+
+# TEST Aggregator Integration
+add_executable(test_stats_aggregator_integration tests/integration/test_stats_aggregator_integration.cpp src/core/StatsAggregator.cpp src/core/parser.cpp src/core/ConnectionTracker.cpp)
+target_include_directories(test_stats_aggregator_integration PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_stats_aggregator_integration PRIVATE GTest::gtest GTest::gtest_main pthread)
+
+
+# TODO: API daemon executable
+add_executable(
+
 )
 
 target_include_directories(netnet-daemon
