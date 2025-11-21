@@ -405,6 +405,7 @@ void NetMonDaemon::stop()
 }
 
 bool NetMonDaemon::isAuthorized(const httplib::Request& req) const {
+    // Check for API token (Bearer or query param)
     auto auth = req.get_header_value("Authorization");
     std::string prefix = "Bearer ";
     if (auth.rfind(prefix, 0) == 0 && auth.substr(prefix.size()) == api_token_) {
@@ -413,6 +414,16 @@ bool NetMonDaemon::isAuthorized(const httplib::Request& req) const {
     if (req.has_param("token") && req.get_param_value("token") == api_token_) {
         return true;
     }
+    // Check for session token (X-Session-Token header)
+    auto session_token = req.get_header_value("X-Session-Token");
+    if (!session_token.empty()) {
+        SessionData session_data;
+        if (session_manager_->validateSession(session_token, session_data)) {
+            // Session is valid and has been refreshed
+            return true;
+        }
+    }
+
     return false;
 }
 
