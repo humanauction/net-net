@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <yaml-cpp/yaml.h>
 #include <thread>
+#include <string>
 #include <chrono>
 #include "httplib.h" // For HTTP server
 #include <sstream>
@@ -12,6 +13,8 @@
 #include <sys/types.h>
 #include <pwd.h>
 #include <grp.h>
+#include "core/SessionManager.h"
+#include "../../include/net-net/vendor/bcrypt.h"
 
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
     : config_path_(config_path)
@@ -90,9 +93,25 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     std::string db_path = config["database"]["path"].as<std::string>();
     persistence_ = std::make_unique<StatsPersistence>(db_path);
 
-    log("info", "NetMonDaemon initialized with config: " + config_path_);
+    // Load user credentials and hash passwords
+    if (config["users"]) {
+        for (const auto& usee : config["users"]) {
+            std::string username = user["username"].as<std::string>();
+            std::string plaintext_password = user["password"].as<std::string>();
+        
+            // Hash password using bcrypt (PBKDF2)
+            std::string hashed = bcrypt::hash(plaintext_password);
 
-    
+            // Store in memory for login validation
+            user_credentials_[username] = hashed;
+
+            log("info", "Loaded User: " + username);
+        }
+    } else {
+        log("warning", "authentication disabled - no user defined in config");
+    }
+
+    log("info", "NetMonDaemon initialized with config: " + config_path_);
 }
 
 void NetMonDaemon::run()

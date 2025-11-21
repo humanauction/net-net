@@ -103,6 +103,16 @@ privilege:
   user: "nobody"
   group: "nobody"
 
+# User Credentials (DEVELOPMENT ONLY - passwords are plaintext)
+# In production, store bcrypt-hashed passwords and load from secure secrets manager
+# User Credentials
+users:
+  # List of valid username/password pairs for API access
+  - username: "admin"
+    password: "adminpass" # TODO: Replace with bcrypt hash in production
+  - username: "user"
+    password: "userpass" # TODO: Replace with bcrypt hash in production
+
 # Performance Tuning
 performance:
   # Buffer size for packet capture (bytes)

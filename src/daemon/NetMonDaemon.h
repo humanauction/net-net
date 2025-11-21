@@ -36,6 +36,7 @@ private:
     std::string api_token_;
     std::string api_host_;
     std::uint16_t api_port_;
+    std::map<std::string, std::string> user_credentials_;
     std::unique_ptr<PcapAdapter> pcap_;
     std::unique_ptr<StatsAggregator> aggregator_;
     std::unique_ptr<StatsPersistence> persistence_;
@@ -44,6 +45,5 @@ private:
     std::string log_level_;
     bool log_timestamps_ = true;
     std::ofstream log_stream_;
+    std::unique_ptr<SessionManager> session_manager_;
 };
-
- 
