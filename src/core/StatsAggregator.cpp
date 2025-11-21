@@ -1,5 +1,5 @@
 #include "StatsAggregator.h"
-#include "parser.h"
+#include "Parser.h"
 
 
 StatsAggregator::StatsAggregator(std::chrono::seconds window_size, size_t history_depth)

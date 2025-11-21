@@ -35,7 +35,7 @@ net-net/
 │  │  ├─ NetMonDaemon.cpp
 │  │  ├─ NetMonDaemon.h
 │  │  └─ ConfigLoader.cpp
-│  └─ main.cpp
+│  └─ Main.cpp
 ├─ www/
 │  ├─ index.html
 │  ├─ style.css
