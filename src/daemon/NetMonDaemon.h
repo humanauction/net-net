@@ -25,7 +25,7 @@ public:
 private:
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_control_request_;
     const std::chrono::seconds control_rate_limit_{2};
-    bool isAuthorized(const httplib::Request& req) const;
+    bool isAuthorized(const httplib::Request& req);
     void logAuthFailure(const httplib::Request& req) const;
     void log(const std::string& level, const std::string& msg);
     bool shouldLog(const std::string& level);

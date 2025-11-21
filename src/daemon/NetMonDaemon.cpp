@@ -232,7 +232,7 @@ void NetMonDaemon::run()
 
         // Extract password
         size_t password_start = body.find(":", password_pos) +2;
-        size_t password_end = body.find("\"", password_start;
+        size_t password_end = body.find("\"", password_start);
         std::string password = body.substr(password_start, password_end - password_start);
 
         // Validate credentials
@@ -274,8 +274,27 @@ void NetMonDaemon::run()
             res.status = 500;
             res.set_content("{\"error\":\"session creation failed\"}", "application/json");
         }
-            
-});
+    });
+    // Logout endpoint - invalidate session
+    svr_.Post("/logout", [this](const httplib::Request& req, httplib::Response& res) {
+        auto session_token = req.get_header_value("X-Session-Token");
+        
+        if (session_token.empty()) {
+            res.status = 400;
+            res.set_content("{\"error\":\"no session token provided\"}", "application/json");
+            return;
+        }
+        // Validate session exists before deleting
+        SessionData session_data;
+        if (session_manager_->validateSession(session_token, session_data)) {
+            session_manager_->deleteSession(session_token);
+            log("info", "Logged out USER: " + session_data.username);
+            res.set_content("{\"status\":\"logged out\"}", "application/json");
+        } else {
+            res.status = 401;
+            res.set_content("{\"error\":\"session invalid\"}", "application/json");
+        }              
+    });
 
     // Start/Stop/Reload control endpoints
     svr_.Post("/control/start", [this](const httplib::Request& req, httplib::Response& res) {
@@ -375,11 +394,19 @@ void NetMonDaemon::run()
         svr_.listen(api_host_, api_port_);
     });
 
-    // Main loop
+    // 
+    int cleanup_counter = 0;
     while (NetMonDaemon::running_signal_ && isRunning()) {
         aggregator_->advanceWindow();
         auto stats = aggregator_->currentStats();
         persistence_->saveWindow(stats);
+
+        // Cleanup expired sessions every 60 seconds
+        if (++cleanup_counter % 60 == 0) {
+            session_manager_->cleanupExpired();
+            log("debug", "Expired sessions CLEANED");
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 
@@ -404,7 +431,7 @@ void NetMonDaemon::stop()
     if (api_thread_.joinable()) api_thread_.join();
 }
 
-bool NetMonDaemon::isAuthorized(const httplib::Request& req) const {
+bool NetMonDaemon::isAuthorized(const httplib::Request& req) {
     // Check for API token (Bearer or query param)
     auto auth = req.get_header_value("Authorization");
     std::string prefix = "Bearer ";
@@ -416,6 +443,7 @@ bool NetMonDaemon::isAuthorized(const httplib::Request& req) const {
     }
     // Check for session token (X-Session-Token header)
     auto session_token = req.get_header_value("X-Session-Token");
+
     if (!session_token.empty()) {
         SessionData session_data;
         if (session_manager_->validateSession(session_token, session_data)) {
