@@ -1,41 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Net-Net Universal Dashboard</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <header>
-        <h1>Network Monitor Dashboard</h1>
-        <p id="status"> Status: <span id="status-text">Connecting you now...</span></p>
-    </header>
-    <main>
-        <section id="metrics">
-            <h2>Metrics</h2>
-            <canvas id="bandwidth-chart">
-                <div id="bandwidth-chart-container"></div>
-            </canvas>
-        </section>
-        <section id="connections">
-            <h2>Connections Active</h2>
-            <table id="connections-table">
-                <thread>
-                    <tr>
-                        <th>Source</th>
-                        <th>Destination</th>
-                        <th>Protocol</th>
-                        <th>Bytes</th>
-                        <th>Packets</th>
-                    </tr>
-                </thread>
-                <tbody></tbody>
-            </table>
-        </section>    
-    </main>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="app.js"></script>
-</body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Net-Net Universal Dashboard</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <header>
+            <h1>Network Monitor Dashboard</h1>
+            <p id="status">
+                Status: <span id="status-text">Connecting you now...</span>
+            </p>
+        </header>
+        <main>
+            <section id="metrics">
+                <h2>Metrics</h2>
+                <canvas id="bandwidth-chart">
+                    <div id="bandwidth-chart-container"></div>
+                </canvas>
+            </section>
+            <section id="connections">
+                <h2>Connections Active</h2>
+                <table id="connections-table">
+                    <thread>
+                        <tr>
+                            <th>Source</th>
+                            <th>Destination</th>
+                            <th>Protocol</th>
+                            <th>Bytes</th>
+                            <th>Packets</th>
+                        </tr>
+                    </thread>
+                    <tbody></tbody>
+                </table>
+            </section>
+            <!-- Login Modal -->
+            <div id="login-modal">
+                <div id="inner-modal">
+                    <h2 id="h2-modal">Login Required</h2>
+                    <form id="login-form">
+                        <input
+                            type="text"
+                            id="username"
+                            placeholder="Username"
+                            class="login"
+                            required
+                        />
+                        <input
+                            type="password"
+                            id="password"
+                            placeholder="Password"
+                            class="login"
+                            required
+                        />
+                        <button type="submit" class="login-btn">Login</button>
+                        <div id="login-error"></div>
+                    </form>
+                </div>
+            </div>
+            <!-- User Info Bar -->
+            <div id="user-bar" class="user-bar">
+                <span
+                    id="username-display"
+                    style="color: #4caf50; margin-right: 15px"
+                ></span>
+                <button id="logout-btn" class="logout-btn">Logout</button>
+            </div>
+        </main>
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="app.js"></script>
+    </body>
 </html>
