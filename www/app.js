@@ -28,7 +28,7 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
         if (response.ok) {
             const data = await response.json();
             sessionToken = data.token;
-            currentUser = data.user;
+            currentUser = data.username;
 
             localStorage.setItem("session_token", sessionToken);
             localStorage.setItem("username", currentUser);
@@ -37,12 +37,12 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
             showDashboard();
         } else {
             const error = await response.json();
-            document.getElementById("login-error").textContext =
+            document.getElementById("login-error").textContent =
                 error.error || "Credentials Invalid";
             document.getElementById("login-error").style.display = "block";
         }
     } catch (err) {
-        document.getElementById("login-error").textContext = "Connection Error";
+        document.getElementById("login-error").textContent = "Connection Error";
         document.getElementById("login-error").style.display = "block";
     }
 });
@@ -78,7 +78,7 @@ function showDashboard() {
     document.getElementById("user-bar").style.display = "block";
     document.getElementById(
         "username-display"
-    ).textContext = `Current User: ${currentUser}`;
+    ).textContent = `Current User: ${currentUser}`;
 
     // Start metric polling
     fetchMetrics();
@@ -86,7 +86,7 @@ function showDashboard() {
 }
 
 function hideDashboard() {
-    document.getElementById("main").style.display = "none";
+    document.querySelector("main").style.display = "none";
 }
 
 // Bandwidth chart setup
@@ -106,8 +106,8 @@ svg.append("g")
     .attr("transform", `translate(0,${svgHeight - margin.bottom})`);
 svg.append("g")
     .attr("class", "y-axis")
-    .attr("transform", `translate(0,${svgHeight - margin.left}, 0)`);
-svg.append("").attr("class", "line").attr("class", "line");
+    .attr("transform", `translate(${margin.left}, 0)`);
+svg.append("path").attr("class", "line");
 
 async function fetchMetrics() {
     if (!sessionToken) return;
@@ -171,7 +171,7 @@ function updateBandwidthChart() {
         .attr("fill", "none")
         .attr("stroke", "#4caf50")
         .attr("stroke-width", "2")
-        .attr("d", "line");
+        .attr("d", line);
 
     svg.select(".x-axis").call(
         d3.axisBottom(x).tickValues(bandwidthData.map((d) => d.time))
