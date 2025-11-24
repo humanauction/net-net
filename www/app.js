@@ -48,10 +48,46 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
 });
 
 // Logout handler
+document.getElementById("logout-btn").addEventListener("click", async () => {
+    try {
+        await fetch(`${API_BASE}/logout`, {
+            method: "POST",
+            headers: { "X-Session-Token": sessionToken },
+        });
+    } catch (err) {
+        console.error("Logout FAILED:", err);
+    }
+    // Clear local storage
+    localStorage.removeItem("session_token");
+    localStorage.removeItem("username");
+    sessionToken = null;
+    currentUser = null;
 
-// Clear local storage
+    showLoginModal();
+    hideDashboard();
+});
 
-// Start metrics polling
+function showLoginModal() {
+    document.getElementById("login-modal").style.display = "block";
+    document.getElementById("user-bar").style.display = "none";
+}
+function hideLoginModal() {
+    document.getElementById("login-modal").style.display = "none";
+}
+function showDashboard() {
+    document.getElementById("user-bar").style.display = "block";
+    document.getElementById(
+        "username-display"
+    ).textContext = `Current User: ${currentUser}`;
+
+    // Start metric polling
+    fetchMetrics();
+    setInterval(fetchMetrics, 2000);
+}
+
+function hideDashboard() {
+    document.getElementById("main").style.display = "none";
+}
 
 // Bandwidth chart setup
 
