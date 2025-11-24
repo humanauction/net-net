@@ -116,8 +116,10 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
             out_data.last_activity = std::chrono::system_clock::from_time_t(last_activity_ts);
             out_data.ip_address = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
 
-            // Update last_activity to current time (session activity tracking)
+            // Finalize SELECT statement before UPDATE
             sqlite3_finalize(stmt);
+
+            // Update last_activity to current time (session activity tracking)
             const char* update_sql = "UPDATE sessions SET last_activity = ? WHERE token = ?";
             sqlite3_stmt* update_stmt = nullptr;
             if (sqlite3_prepare_v2(db_, update_sql, -1, &update_stmt, nullptr) == SQLITE_OK) {
@@ -126,15 +128,17 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
                 sqlite3_step(update_stmt);
                 sqlite3_finalize(update_stmt);
             }
+
             valid = true;
+        } else {
+            // expired session
+            sqlite3_finalize(stmt);
         }
     } else {
-        sqlite3_finalize(stmt);
+        // Session not found
+        sqlite3_finalize(stmt); 
     }
 
-    if (!valid) {
-        sqlite3_finalize(stmt);
-    }
     return valid;
 }
 // Deletes a session (called on logout)

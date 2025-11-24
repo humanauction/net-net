@@ -134,6 +134,30 @@ target_link_libraries(test_stats_aggregator
     PRIVATE GTest::gtest GTest::gtest_main pthread
 )
 
+# TEST Session Management
+add_executable(test_session_manager
+    tests/unit/test_session_manager.cpp 
+    src/core/SessionManager.cpp
+    include/net-net/vendor/uuid_gen.cpp
+    include/net-net/vendor/bcrypt.cpp
+)
+target_include_directories(test_session_manager
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+
+)
+
+target_link_libraries(test_session_manager 
+    PRIVATE 
+        GTest::gtest 
+        GTest::gtest_main 
+        pthread
+        ${SQLITE3_LIBRARIES}
+        OpenSSL::SSL
+        OpenSSL::Crypto
+)
+
 # TEST Aggregator Integration
 add_executable(test_stats_aggregator_integration
     tests/integration/test_stats_aggregator_integration.cpp 
