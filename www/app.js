@@ -1,86 +1,60 @@
-const API_BASE = 'http://localhost:8082';
+const API_BASE = "http://localhost:8082";
 
-let API_TOKEN = localStorage.getItem('api_token');
-if (!API_TOKEN) {
-    API_TOKEN = prompt("Enter API Token:");
-    localStorage.setItem('api_token', API_TOKEN);
+// Session management
+let sessionToken = localStorage.getItem("session_token");
+let currentUser = localStorage.getItem("username");
+
+// Check if user is logged in
+if (sessionToken && currentUser) {
+    showDashboard();
+} else {
+    showLoginModal();
 }
 
-let bandwidthData = [];
-const svgWidth = 600, svgHeight = 300;
-const margin = {top: 20, right: 20, bottom: 40, left: 50};
+// Login form handler
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
 
-const svg = d3.select("#bandwidth-chart")
-    .append("svg")
-    .attr("width", svgWidth)
-    .attr("height", svgHeight);
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
 
-svg.append("g").attr("class", "x-axis")
-    .attr("transform", `translate(0,${svgHeight - margin.bottom})`);
-svg.append("g").attr("class", "y-axis")
-    .attr("transform", `translate(${margin.left},0)`);
-svg.append("path").attr("class", "line");
+    try {
+        const response = await fetch(`${API_BASE}/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+        });
 
-function fetchMetrics() {
-    fetch(`${API_BASE}/metrics`, {
-        headers: {'Authorization': `Bearer ${API_TOKEN}` }
-    })
-    .then(res => {
-        if(!res.ok) {
-            throw new Error(`API error: ${res.status} ${res.statusText}`);
+        if (response.ok) {
+            const data = await response.json();
+            sessionToken = data.token;
+            currentUser = data.user;
+
+            localStorage.setItem("session_token", sessionToken);
+            localStorage.setItem("username", currentUser);
+
+            hideLoginModal();
+            showDashboard();
+        } else {
+            const error = await response.json();
+            document.getElementById("login-error").textContext =
+                error.error || "Credentials Invalid";
+            document.getElementById("login-error").style.display = "block";
         }
-        return res.json();
-    })
-    
-    .then(data => {
-        // Success: Update status
-        document.getElementById('status-text').textContent = 'Connected';
-        document.getElementById('status-text').style.color = '#4caf50';
-        // Add data point
-        const now = new Date().toLocaleTimeString();
-        bandwidthData.push({ time: now, bytes: data.total_bytes || 0 });
-        if (bandwidthData.length > 20) bandwidthData.shift();
+    } catch (err) {
+        document.getElementById("login-error").textContext = "Connection Error";
+        document.getElementById("login-error").style.display = "block";
+    }
+});
 
-        updateBandwidthChart();
-    })
-    .catch(err => {
-        // Error: Update status and log
-        console.error('Failure to fetch metrics:', err);
-        document.getElementById('status-text').textContent = 'Disconnected';
-        document.getElementById('status-text').style.color = '#f44336';
+// Logout handler
 
-        // Show error details as tooltip
-        const chartContainer = document.getElementById('bandwidth-chart');
-        chartContainer.title = `Error: ${err.message}`;
-    });
-}
+// Clear local storage
 
-function updateBandwidthChart() {
-    const x = d3.scalePoint()
-        .domain(bandwidthData.map(d => d.time))
-        .range([margin.left, svgWidth - margin.right]);
+// Start metrics polling
 
-    const y = d3.scaleLinear()
-        .domain([0, d3.max(bandwidthData, d => d.bytes) || 1])
-        .range([svgHeight - margin.bottom, margin.top]);
+// Bandwidth chart setup
 
-    const line = d3.line()
-        .x(d => x(d.time))
-        .y(d => y(d.bytes));
+// Update status
 
-    svg.select(".line")
-        .datum(bandwidthData)
-        .attr("fill", "none")
-        .attr("stroke", "#4caf50")
-        .attr("stroke-width", 2)
-        .attr("d", line);
-
-    svg.select(".x-axis")
-        .call(d3.axisBottom(x).tickValues(bandwidthData.map(d => d.time)));
-
-    svg.select(".y-axis")
-        .call(d3.axisLeft(y));
-}
-
-setInterval(fetchMetrics, 2000);
-fetchMetrics();
+// Add data point
