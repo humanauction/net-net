@@ -143,3 +143,78 @@ TEST_F(SessionManagerTest, CreateSessionAcceptsIPv6) {
     EXPECT_EQ(data.ip_address, "2001:0db8:85a3::8a2e:0370:7334");
 }
 
+// TEST 7: validateSession() rejects expired sessions
+TEST_F(SessionManagerTest, ValidateSessionRejectsExpired) {
+    // Create session manager with 1-second expiry
+    std::string test_db = "/tmp/test_session_expired_" + std::to_string(getpid()) + ".db";
+    unlink(test_db.c_str());
+    SessionManager short_manager(test_db, 1);  // 1 second expiry
+
+    // Create session
+    std::string token = short_manager.createSession("testuser", "127.0.0.1");
+
+    // Validate immediately - should succeed
+    SessionData data;
+    EXPECT_TRUE(short_manager.validateSession(token, data))
+        << "Session should be valid immediately after creation";
+
+    // Sleep 2 seconds (past expiry)
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Validate again - should fail (expired)
+    SessionData data2;
+
+    EXPECT_FALSE(short_manager.validateSession(token, data2))
+        << "Session should be invalid after expiry period";
+    // Clean up
+    unlink(test_db.c_str());
+}
+// TEST 8: deleteSession() removes session
+TEST_F(SessionManagerTest, DeleteSessionRemovesSession) {
+    std::string token = manager_->createSession("testuser", "127.0.0.1");
+    
+    // Verify session exists
+    SessionData data;
+    ASSERT_TRUE(manager_->validateSession(token, data))
+        << "Session should exist before deletion";
+    
+    // Delete session
+    manager_->deleteSession(token);
+    
+    // Verify session no longer exists
+    SessionData data2;
+    EXPECT_FALSE(manager_->validateSession(token, data2))
+        << "Session should not exist after deletion";
+}
+
+// TEST 9: cleanupExpired() removes old sessions
+TEST_F(SessionManagerTest, CleanupExpiredRemovesOldSessions) {
+    // Create session manager with 1-second expiry
+    std::string test_db = "/tmp/test_session_cleanup_" + std::to_string(getpid()) + ".db";
+    unlink(test_db.c_str());
+    SessionManager short_manager(test_db, 1);  // 1 second expiry
+    
+    // Create two sessions
+    std::string token1 = short_manager.createSession("user1", "192.168.1.1");
+    std::string token2 = short_manager.createSession("user2", "192.168.1.2");
+    
+    // Both should be valid
+    SessionData data;
+    ASSERT_TRUE(short_manager.validateSession(token1, data));
+    ASSERT_TRUE(short_manager.validateSession(token2, data));
+    
+    // Sleep 2 seconds (past expiry)
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    
+    // Run cleanup
+    short_manager.cleanupExpired();
+    
+    // Both sessions should be gone
+    EXPECT_FALSE(short_manager.validateSession(token1, data))
+        << "Expired session 1 should be cleaned up";
+    EXPECT_FALSE(short_manager.validateSession(token2, data))
+        << "Expired session 2 should be cleaned up";
+    
+    // Clean up
+    unlink(test_db.c_str());
+}
