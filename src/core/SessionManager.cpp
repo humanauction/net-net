@@ -2,6 +2,7 @@
 #include "../../include/net-net/vendor/uuid_gen.h"
 #include <stdexcept>
 #include <ctime>
+#include <iostream>
 
 // Constructor: Opens SQLite database and initializes session table
 // db_path: Path to SQLite database file (e.g., "/tmp/netnet_sessions.db")
@@ -10,6 +11,14 @@ SessionManager::SessionManager(const std::string& db_path, int expiry_seconds) :
     // Open database connection
     if (sqlite3_open(db_path.c_str(), &db_) != SQLITE_OK) {
         throw std::runtime_error("Failed to open session database: " + std::string(sqlite3_errmsg(db_)));
+    }
+
+    // Enable write-ahead logging (WAL) for better concurrency
+    char* err_msg = nullptr;
+    sqlite3_exec(db_, "PRAGMA journal_mode=WAL;", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "WAL mode warning: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
     }
     // Create sessions table if none exists
     initDatabase();
@@ -92,9 +101,6 @@ std::string SessionManager::createSession(const std::string& username, const std
 // Returns: true if session exists and hasn't expired, false otherwise
 
 bool SessionManager::validateSession(const std::string& token, SessionData& out_data) {
-    auto now = std::chrono::system_clock::now();
-    auto now_timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-
     // Query Session by Token
     const char* sql = "SELECT username, created_at, last_activity, ip_address FROM sessions WHERE token = ?";
     sqlite3_stmt* stmt = nullptr;
@@ -104,32 +110,48 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
     sqlite3_bind_text(stmt, 1, token.c_str(), -1, SQLITE_TRANSIENT);
 
     bool valid = false;
+    int64_t old_last_activity = 0;  // Store the OLD last_activity
+    
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        int64_t last_activity_ts = sqlite3_column_int64(stmt, 2);
+        old_last_activity = sqlite3_column_int64(stmt, 2);
+        
+        // Get current time INSIDE the if block (not at function start)
+        auto now = std::chrono::system_clock::now();
+        auto now_timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
 
         // Check for expired session (current time - last_activity > expiry_seconds)
-        if (now_timestamp - last_activity_ts <= expiry_seconds_) {
+        if (now_timestamp - old_last_activity <= expiry_seconds_) {
             // Session is valid - populate output data
             out_data.token = token;
             out_data.username = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
             out_data.created_at = std::chrono::system_clock::from_time_t(sqlite3_column_int64(stmt, 1));
-            out_data.last_activity = std::chrono::system_clock::from_time_t(last_activity_ts);
             out_data.ip_address = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
 
-            // Finalize SELECT statement before UPDATE
+            valid = true;
+            
+            // Finalize SELECT before UPDATE
             sqlite3_finalize(stmt);
-
-            // Update last_activity to current time (session activity tracking)
+            
+            // Update last_activity to NOW (not the old now_timestamp from function start)
             const char* update_sql = "UPDATE sessions SET last_activity = ? WHERE token = ?";
             sqlite3_stmt* update_stmt = nullptr;
             if (sqlite3_prepare_v2(db_, update_sql, -1, &update_stmt, nullptr) == SQLITE_OK) {
                 sqlite3_bind_int64(update_stmt, 1, now_timestamp);
                 sqlite3_bind_text(update_stmt, 2, token.c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_step(update_stmt);
+                
+                if (sqlite3_step(update_stmt) == SQLITE_DONE) {
+                    // Update succeeded - set last_activity to the NEW timestamp
+                    out_data.last_activity = std::chrono::system_clock::from_time_t(now_timestamp);
+                } else {
+                    // Update failed - use OLD timestamp
+                    std::cerr << "UPDATE failed: " << sqlite3_errmsg(db_) << std::endl;
+                    out_data.last_activity = std::chrono::system_clock::from_time_t(old_last_activity);
+                }
                 sqlite3_finalize(update_stmt);
+            } else {
+                std::cerr << "Failed to prepare UPDATE: " << sqlite3_errmsg(db_) << std::endl;
+                out_data.last_activity = std::chrono::system_clock::from_time_t(old_last_activity);
             }
-            
-            valid = true;
         } else {
             // Session expired
             sqlite3_finalize(stmt);
@@ -141,6 +163,7 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
 
     return valid;
 }
+
 // Deletes a session (called on logout)
 // token: Session token to invalidate
 void SessionManager::deleteSession(const std::string& token) {

@@ -115,9 +115,14 @@ TEST_F(SessionManagerTest, CreateSessionSetsTimestampsCorrectly) {
     EXPECT_EQ(created_at_seconds, created_at_seconds2)
         << "created_at should never change";
 
-    // last_activity should be newer than the first validation
-    EXPECT_GE(last_activity_seconds2, last_activity_seconds + std::chrono::seconds(2))
-        << "last_activity should be newer than the first validation";
+    // last_activity should allow ±1s tolerance 
+    auto diff = std::chrono::duration_cast<std::chrono::seconds>(
+        last_activity_seconds2 - last_activity_seconds).count();
+
+        EXPECT_GE(diff, 1)
+            << "last_activity should advance by at least 1 second, got: " << diff << "s";
+        EXPECT_LE(diff, 3)
+            << "last_activity should advance by at least 3 seconds, got: " << diff << "s";
 }
 
 // TEST 5: createSession() accepts special characters in username

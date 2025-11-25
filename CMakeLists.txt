@@ -141,11 +141,9 @@ add_executable(test_session_manager
     include/net-net/vendor/uuid_gen.cpp
     include/net-net/vendor/bcrypt.cpp
 )
-target_include_directories(test_session_manager
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-
+target_include_directories(test_session_manager PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(test_session_manager 
