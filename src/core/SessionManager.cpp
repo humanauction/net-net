@@ -108,7 +108,7 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
         int64_t last_activity_ts = sqlite3_column_int64(stmt, 2);
 
         // Check for expired session (current time - last_activity > expiry_seconds)
-        if (now_timestamp -  last_activity_ts <= expiry_seconds_) {
+        if (now_timestamp - last_activity_ts <= expiry_seconds_) {
             // Session is valid - populate output data
             out_data.token = token;
             out_data.username = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
@@ -128,15 +128,15 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
                 sqlite3_step(update_stmt);
                 sqlite3_finalize(update_stmt);
             }
-
+            
             valid = true;
         } else {
-            // expired session
+            // Session expired
             sqlite3_finalize(stmt);
         }
     } else {
         // Session not found
-        sqlite3_finalize(stmt); 
+        sqlite3_finalize(stmt);
     }
 
     return valid;
