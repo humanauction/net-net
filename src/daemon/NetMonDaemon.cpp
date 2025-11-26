@@ -249,7 +249,15 @@ void NetMonDaemon::run()
         }
 
         // Verify password against bcrypt hash
-        if (!bcrypt::verify(password, it->second)) {
+        log("debug", "=== PASSWORD VERIFICATION ===");
+        log("debug", "Username: " + username);
+        log("debug", "Input password: " + password);
+        log("debug", "Stored hash: " + it->second);
+        
+        bool verify_result = bcrypt::verify(password, it->second);
+        log("debug", "Verify result: " + std::string(verify_result ? "TRUE" : "FALSE"));
+        
+        if (!verify_result) {
             log("warn", "Login attempt failed for: " + username);
             res.status = 401;
             res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
