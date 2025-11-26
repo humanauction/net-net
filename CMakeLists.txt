@@ -12,9 +12,20 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCAP REQUIRED libpcap)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 
-# Find OpenSSL and yaml-cpp early
+# Find OpenSSL, yaml-cpp, nlohmann_json early
 find_package(OpenSSL REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(nlohmann_json REQUIRED)
+
+# Find or add cpp-httplib
+find_path(HTTPLIB_INCLUDE_DIR httplib.h
+    PATHS /usr/local/include /opt/homebrew/include
+)
+if(NOT HTTPLIB_INCLUDE_DIR)
+    message(FATAL_ERROR "httplib.h not found. Install: brew install cpp-httplib")
+endif()
+
+include_directories(${HTTPLIB_INCLUDE_DIR})
 
 # Vendor include dir
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor)
@@ -177,24 +188,22 @@ target_link_libraries(test_stats_aggregator_integration
 
 # API daemon executable
 add_executable(netnet-daemon
-    src/core/ConnectionTracker.cpp
-    src/core/Parser.cpp
-    src/net/PcapAdapter.cpp
-    src/core/SessionManager.cpp
-    src/core/StatsAggregator.cpp
-    src/core/StatsPersistence.cpp
+    # src/core/ConnectionTracker.cpp
+    # src/core/Parser.cpp
+    # src/net/PcapAdapter.cpp
+    # src/core/SessionManager.cpp
+    # src/core/StatsAggregator.cpp
+    # src/core/StatsPersistence.cpp
     src/daemon/NetMonDaemon.cpp
-    include/net-net/vendor/bcrypt.cpp
-    include/net-net/vendor/uuid_gen.cpp
 )
 
 target_include_directories(netnet-daemon
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/core
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/net
+        # ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        # ${CMAKE_CURRENT_SOURCE_DIR}/src/net
         ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
+        ${HTTPLIB_INCLUDE_DIR}
         ${SQLITE3_INCLUDE_DIRS}
 )
 
@@ -203,8 +212,9 @@ target_link_libraries(netnet-daemon
         netnet-core
         yaml-cpp
         pthread
-        ${PCAP_LIBRARIES}
+        nlohmann_json::nlohmann_json
+        # ${PCAP_LIBRARIES}
         ${SQLITE3_LIBRARIES}
-        OpenSSL::SSL
-        OpenSSL::Crypto
+        # OpenSSL::SSL
+        # OpenSSL::Crypto
 )

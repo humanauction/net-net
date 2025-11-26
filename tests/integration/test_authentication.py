@@ -4,7 +4,7 @@ import time
 import subprocess
 import os
 import re
-# import yaml
+import yaml
 
 #  Test Configuration
 BASE_URL = "http://localhost:8082"
@@ -15,6 +15,14 @@ DAEMON_PATH = "./build/netnet-daemon"
 @pytest.fixture(scope="module")
 def daemon_process():
     """Start daemon before test, stop daemon after"""
+    # VERIFY config has debug logging
+    with open(CONFIG_PATH, 'r') as f:
+        config = yaml.safe_load(f)
+        print(
+            f"Config log_level: "
+            f"{config.get('logging', {}).get('level', 'NOT SET')}"
+        )
+
     # Kill existing daemon
     os.system("sudo pkill -9 netnet-daemon 2>/dev/null")
     time.sleep(2)
@@ -24,11 +32,11 @@ def daemon_process():
         ["sudo", DAEMON_PATH, "--config", CONFIG_PATH]
         # Remove stdout/stderr redirect to see logs
     )
-    
+
     time.sleep(3)  # Give it time to fully start
-    
+
     yield proc
-    
+
     os.system("sudo pkill -9 netnet-daemon 2>/dev/null")
     proc.kill()
 

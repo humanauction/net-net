@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <pwd.h>
 #include <grp.h>
+#include <nlohmann/json.hpp>
 #include "core/SessionManager.h"
 #include "../../include/net-net/vendor/bcrypt.h"
 
@@ -34,6 +35,9 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
      * 9. Drop privileges (AFTER capture device is open)
      * 10. Start API server (runs as unprivileged user)
      */
+
+    
+    log("info", "Loading configuration from: " + config_path);
 
     YAML::Node config = YAML::LoadFile(config_path_);
     // Logging Level and File Configuration
@@ -218,75 +222,73 @@ void NetMonDaemon::run()
 
     // TODO: Login endpoint - authenticate user and create session
     svr_.Post("/login", [this](const httplib::Request& req, httplib::Response& res) {
-        // Parse JSON request body
-        std::string body = req.body;
-        size_t username_pos = body.find("\"username\"");
-        size_t password_pos = body.find("\"password\"");
-
-        if (username_pos == std::string::npos || password_pos == std::string::npos) {
-            res.status = 400;
-            res.set_content("{\"error\":\"missing username or password\"}", "application/json");
-            return;
-        }
-
-        // Extract username (simple JSON parsing - production should use library)
-        size_t username_start = body.find(":", username_pos) + 2; // Skip : and "
-        size_t username_end = body.find("\"", username_start);
-        std::string username = body.substr(username_start, username_end - username_start);
-
-        // Extract password
-        size_t password_start = body.find(":", password_pos) +2;
-        size_t password_end = body.find("\"", password_start);
-        std::string password = body.substr(password_start, password_end - password_start);
-
-        // Validate credentials
-        auto it = user_credentials_.find(username);
-        if (it == user_credentials_.end()) {
-            log("warn", "User does not exist: " + username);
-            res.status = 401;
-            res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
-            return;
-        }
-
-        // Verify password against bcrypt hash
-        log("debug", "=== PASSWORD VERIFICATION DEBUG ===");
-        log("debug", "Username: " + username);
-        log("debug", "Password: [" + password + "]");
-        log("debug", "Password length: " + std::to_string(password.length()));
-        log("debug", "Stored hash: [" + it->second + "]");
-        log("debug", "Stored hash length: " + std::to_string(it->second.length()));
-        
-        bool verify_result = bcrypt::verify(password, it->second);
-        log("debug", "bcrypt::verify() returned: " + std::string(verify_result ? "TRUE" : "FALSE"));
-        
-        if (!verify_result) {
-            log("warn", "Login attempt failed for: " + username);
-            res.status = 401;
-            res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
-            return;
-        }
-
-        // Get client IP for session tracking
-        std::string client_ip = req.remote_addr;
-
-        // Create session
         try {
-            std::string token = session_manager_->createSession(username, client_ip);
+            // Parse JSON properly
+            auto json_body = nlohmann::json::parse(req.body);
+            
+            std::string username = json_body.value("username", "");
+            std::string password = json_body.value("password", "");
+            
+            if (username.empty() || password.empty()) {
+                log("warn", "Login attempt with missing credentials");
+                res.status = 400;
+                res.set_content("{\"error\":\"missing username or password\"}", "application/json");
+                return;
+            }
 
-            log("info", "Logged in user: " + username + "from" + client_ip);
-            // Return session token
-            std::ostringstream oss;
-            oss << "{";
-            oss << "\"token\":\"" << token << "\",";
-            oss << "\"username\":\"" << username << "\",";
-            oss << "\"expires_in\":" << 3600;  // TODO: Get from config
-            oss << "}";
+            // Validate credentials
+            auto it = user_credentials_.find(username);
+            if (it == user_credentials_.end()) {
+                log("warn", "User does not exist: " + username);
+                res.status = 401;
+                res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
+                return;
+            }
 
-            res.set_content(oss.str(), "application/json");
-        } catch (std::exception& ex) {
-            log("error", "Create Session FAILED: " + std::string(ex.what()));
+            // Verify password against bcrypt hash
+            log("debug", "=== PASSWORD VERIFICATION DEBUG ===");
+            log("debug", "Username: " + username);
+            log("debug", "Password: [" + password + "]");
+            log("debug", "Password length: " + std::to_string(password.length()));
+            log("debug", "Stored hash: [" + it->second + "]");
+            log("debug", "Stored hash length: " + std::to_string(it->second.length()));
+            
+            bool verify_result = bcrypt::verify(password, it->second);
+            log("debug", "bcrypt::verify() returned: " + std::string(verify_result ? "TRUE" : "FALSE"));
+            
+            if (!verify_result) {
+                log("warn", "Login attempt failed for: " + username);
+                res.status = 401;
+                res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
+                return;
+            }
+
+            // Get client IP for session tracking
+            std::string client_ip = req.remote_addr;
+
+            // Create session
+            try {
+                std::string token = session_manager_->createSession(username, client_ip);
+
+                log("info", "Logged in user: " + username + "from" + client_ip);
+                // Return session token
+                std::ostringstream oss;
+                oss << "{";
+                oss << "\"token\":\"" << token << "\",";
+                oss << "\"username\":\"" << username << "\",";
+                oss << "\"expires_in\":" << 3600;  // TODO: Get from config
+                oss << "}";
+
+                res.set_content(oss.str(), "application/json");
+            } catch (std::exception& ex) {
+                log("error", "Create Session FAILED: " + std::string(ex.what()));
+                res.status = 500;
+                res.set_content("{\"error\":\"session creation failed\"}", "application/json");
+            }
+        } catch (const std::exception& ex) {
+            log("error", "Login request processing failed: " + std::string(ex.what()));
             res.status = 500;
-            res.set_content("{\"error\":\"session creation failed\"}", "application/json");
+            res.set_content("{\"error\":\"internal server error\"}", "application/json");
         }
     });
     // Logout endpoint - invalidate session
