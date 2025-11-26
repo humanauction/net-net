@@ -17,43 +17,20 @@ def daemon_process():
     """Start daemon before test, stop daemon after"""
     # Kill existing daemon
     os.system("sudo pkill -9 netnet-daemon 2>/dev/null")
-    time.sleep(1)
+    time.sleep(2)
 
-    # Start daemon
+    # Start daemon WITHOUT suppressing output so we can see logs
     proc = subprocess.Popen(
-        ["sudo", DAEMON_PATH, "--config", CONFIG_PATH],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        ["sudo", DAEMON_PATH, "--config", CONFIG_PATH]
+        # Remove stdout/stderr redirect to see logs
     )
-
-    # Wait for daemon to start with exponential backoff
-    max_retries = 10
-    for i in range(max_retries):
-        time.sleep(0.5 * (i + 1))  # 0.5s, 1s, 1.5s, 2s, etc.
-        try:
-            response = requests.get(f"{BASE_URL}/", timeout=2)
-            if response.status_code in [200, 404]:
-                break
-        except requests.exceptions.RequestException:
-            if i == max_retries - 1:
-                # Capture stderr for debugging
-                stdout, stderr = proc.communicate(timeout=1)
-                proc.kill()
-                pytest.fail(
-                    f"Daemon failed to start after {max_retries} retries.\n"
-                    f"STDOUT: {stdout.decode()}\n"
-                    f"STDERR: {stderr.decode()}"
-                )
-            continue
-
+    
+    time.sleep(3)  # Give it time to fully start
+    
     yield proc
-
-    # Clean up: daemon stop
+    
     os.system("sudo pkill -9 netnet-daemon 2>/dev/null")
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    proc.kill()
 
 
 @pytest.fixture

@@ -91,7 +91,7 @@ api:
 # Logging
 logging:
     # Log level: debug, info, warn, error
-    level: "info"
+    level: debug
     # Log file path (empty = stdout only)
     file: ""
     # Include timestamps
@@ -109,12 +109,12 @@ privilege:
 users:
     # List of valid username/password pairs for API access
     - username: "admin"
-      password: "10000$7be8d03ca8c18c9898c2d8f2eed83c4a$de547d8a33f3b388aa985be92c897a977f5463a72a2f9791a3624a1a9f41ba81" # TODO: Replace with bcrypt hash in production
+      password: "10000$133d6487d65d3e218173650ff5d6f962$7661cac9078ff1a92db656227bb2cad8fa15cf043672395c300ea3b0ee183836" # TODO: Replace with bcrypt hash in production
       plaintext: "adminpass" # For testing only
     - username: "user"
-      password: "10000$a3d7751c0101c9787796022a2b5201e8$439f8285bff53fe2bd0585acd385df7b907f7e27b41716d2ed4bba2939384736" # TODO: Replace with bcrypt hash in production
+      password: "10000$cc5a04764424a54967c5489a8adb1524$5936ff5a2a291c5d49914404eebbf120a56f6ade9f79d6bd34e71b3dd32f4405" # TODO: Replace with bcrypt hash in production
       plaintext: "userpass" # For testing only
-      
+
 # Performance Tuning
 performance:
     # Buffer size for packet capture (bytes)

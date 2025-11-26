@@ -249,13 +249,15 @@ void NetMonDaemon::run()
         }
 
         // Verify password against bcrypt hash
-        log("debug", "=== PASSWORD VERIFICATION ===");
+        log("debug", "=== PASSWORD VERIFICATION DEBUG ===");
         log("debug", "Username: " + username);
-        log("debug", "Input password: " + password);
-        log("debug", "Stored hash: " + it->second);
+        log("debug", "Password: [" + password + "]");
+        log("debug", "Password length: " + std::to_string(password.length()));
+        log("debug", "Stored hash: [" + it->second + "]");
+        log("debug", "Stored hash length: " + std::to_string(it->second.length()));
         
         bool verify_result = bcrypt::verify(password, it->second);
-        log("debug", "Verify result: " + std::string(verify_result ? "TRUE" : "FALSE"));
+        log("debug", "bcrypt::verify() returned: " + std::string(verify_result ? "TRUE" : "FALSE"));
         
         if (!verify_result) {
             log("warn", "Login attempt failed for: " + username);
