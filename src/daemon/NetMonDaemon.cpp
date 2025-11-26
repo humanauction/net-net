@@ -137,13 +137,13 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
 
     // Initialize session manager
     std::string session_db_path = db_path + ".sessions";
-    int session_expiry = 3600;
+    
     if (config["api"]["session_expiry"]) {
-        session_expiry = config["api"]["session_expiry"].as<int>();
+        session_expiry_ = config["api"]["session_expiry"].as<int>();
     }
-    session_manager_ = std::make_unique<SessionManager>(session_db_path, session_expiry);
+    session_manager_ = std::make_unique<SessionManager>(session_db_path, session_expiry_);
 
-    log("info", "Session manager initialized (expiry: " + std::to_string(session_expiry) + "s)");
+    log("info", "Session manager initialized (expiry: " + std::to_string(session_expiry_) + "s)");
 
     log("info", "NetMonDaemon initialized with config: " + config_path_);
 }
@@ -189,13 +189,49 @@ void NetMonDaemon::run()
         }
 
         auto stats = aggregator_->currentStats();
+
+        // Calculate totals
+        uint64_t total_bytes =0;
+        uint64_t total_packets =0;
+        std::map<std::string, uint64_t> protocol_bytes;
+
+        for (const auto& kv : stats.flows) {
+            const auto& val = kv.second;
+            uint64_t flow_bytes = val.bytes_c2s + val.bytes_s2c;
+            uint64_t flow_packets = val.pkts_c2s + val.pkts_s2c;
+
+            total_bytes += flow_bytes;            
+            total_packets += flow_packets;
+            
+            // Protocol breakdown
+            std::string proto = (kv.first.protocol == 6 ? "TCP" :
+                                kv.first.protocol == 17 ? "UDP" : "OTHER");
+            protocol_bytes[proto] += flow_bytes;
+        }
+
         std::ostringstream oss;
         oss << "{";
-        oss << "\"window_start\":" <<std::chrono::duration_cast<std::chrono::seconds>(stats.window_start.time_since_epoch()).count() << ",";
-        oss << "\"total_bytes\":0,";  // TODO: Calculate total from flows
-        oss << "\"total_packets\":0,";  // TODO: Calculate total from flows
-        oss << "\"active_flows\":[";
+        oss << "\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count() << ",";
+        oss << "\"window_start\":" << std::chrono::duration_cast<std::chrono::seconds>(
+            stats.window_start.time_since_epoch()).count() << ",";
+        oss << "\"total_bytes\":" << total_bytes << ",";
+        oss << "\"total_packets\":" << total_packets << ",";
+        oss << "\"bytes_per_second\":" << (total_bytes / std::max(1, 
+            static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now() - stats.window_start).count()))) << ",";
+        
+        // Protocol breakdown
+        oss << "\"protocol_breakdown\":{";
+        bool first_proto = true;
+        for (const auto& proto : protocol_bytes) {
+            if (!first_proto) oss << ",";
+            first_proto = false;
+            oss << "\"" << proto.first << "\":" << proto.second;
+        }
+        oss << "},";
 
+        oss << "\"active_flows\":[";
         bool first = true;
         for (const auto& kv : stats.flows) {
             if (!first) oss << ",";
@@ -278,13 +314,13 @@ void NetMonDaemon::run()
             try {
                 std::string token = session_manager_->createSession(username, client_ip);
 
-                log("info", "Logged in user: " + username + "from" + client_ip);
+                log("info", "Logged in user: " + username + "from " + client_ip);
                 // Return session token
                 std::ostringstream oss;
                 oss << "{";
                 oss << "\"token\":\"" << token << "\",";
                 oss << "\"username\":\"" << username << "\",";
-                oss << "\"expires_in\":" << 3600;  // TODO: Get from config
+                oss << "\"expires_in\":" << session_expiry_;
                 oss << "}";
 
                 res.set_content(oss.str(), "application/json");

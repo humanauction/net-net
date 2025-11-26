@@ -47,4 +47,5 @@ private:
     bool log_timestamps_ = true;
     std::ofstream log_stream_;
     std::unique_ptr<SessionManager> session_manager_;
+    int session_expiry_ = 3600;
 };
