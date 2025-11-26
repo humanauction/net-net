@@ -109,9 +109,9 @@ privilege:
 users:
     # List of valid username/password pairs for API access
     - username: "admin"
-      password: "$2b$12$qu6hXvnQfslW8ZEqOe9pq.T7NXfCGd87z1Yk4a6nsOY8HVXTZLUBO" # TODO: Replace with bcrypt hash in production
+      password: "adminpass" # TODO: Replace with bcrypt hash in production 10000$7be8d03ca8c18c9898c2d8f2eed83c4a$de547d8a33f3b388aa985be92c897a977f5463a72a2f9791a3624a1a9f41ba81
     - username: "user"
-      password: "$2b$12$Q.WC4W.4lumenzlPyaWfA.tIfyZNLijXP/S6MvyRsA.5CTMRRYpGm" # TODO: Replace with bcrypt hash in production
+      password: "userpass" # TODO: Replace with bcrypt hash in production 10000$a3d7751c0101c9787796022a2b5201e8$439f8285bff53fe2bd0585acd385df7b907f7e27b41716d2ed4bba2939384736
 
 # Performance Tuning
 performance:

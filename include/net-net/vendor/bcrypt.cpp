@@ -40,7 +40,25 @@ std::string hash(const std::string& password) {
 }
 
 bool verify(const std::string& password, const std::string& stored_hash) {
-    // Parse stored hash: iterations$salt$hash
+    // Check if this is a standard bcrypt hash ($2a$/$2b$/$2y$)
+    if (stored_hash.length() >= 4 && 
+        (stored_hash.substr(0, 4) == "$2a$" ||
+         stored_hash.substr(0, 4) == "$2b$" ||
+         stored_hash.substr(0, 4) == "$2y$")) {
+        
+        // Use system bcrypt (crypt_r on Linux, bcrypt on OpenBSD/macOS)
+        #ifdef __APPLE__
+            // macOS doesn't have crypt_r, use a proper bcrypt library instead
+            throw std::runtime_error("Standard bcrypt not supported - use PBKDF2 format or install libbcrypt");
+        #else
+            struct crypt_data data;
+            data.initialized = 0;
+            char* result = crypt_r(password.c_str(), stored_hash.c_str(), &data);
+            return result && stored_hash == result;
+        #endif
+    }
+    
+    // Fall back to custom PBKDF2 format (iterations$salt$hash)
     size_t pos1 = stored_hash.find('$');
     size_t pos2 = stored_hash.find('$', pos1 + 1);    
 

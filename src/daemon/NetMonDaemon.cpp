@@ -113,16 +113,20 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     if (config["users"]) {
         for (const auto& user : config["users"]) {
             std::string username = user["username"].as<std::string>();
-            std::string plaintext_password = user["password"].as<std::string>();
-        
-            // Hash password using bcrypt (PBKDF2)
-            std::string hashed = bcrypt::hash(plaintext_password);
+            std::string password = user["password"].as<std::string>();
 
-            // Store in memory for login validation
-            user_credentials_[username] = hashed;
+            // Check if password is already in PBKDF2 format (iterations$salt$hash)
+            if (password.find('$') != std::string::npos) {
+                // Already hashed (PBKDF2 or bcrypt format) - store as-is
+                user_credentials_[username] = password;
+            } else {
+                // Plaintext password - hash it (INSECURE - development only)
+                log("warn", "Plaintext password detected for: " + username + " - hashing now");
+                user_credentials_[username] = bcrypt::hash(password);
+            }
 
             log("info", "Loaded User: " + username);
-        }
+        }   
     } else {
         log("warn", "authentication disabled - no user defined in config");
     }
@@ -246,7 +250,7 @@ void NetMonDaemon::run()
 
         // Verify password against bcrypt hash
         if (!bcrypt::verify(password, it->second)) {
-            log("warn", "Ogin attempt failed for: " + username);
+            log("warn", "Login attempt failed for: " + username);
             res.status = 401;
             res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
             return;
