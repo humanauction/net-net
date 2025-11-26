@@ -224,7 +224,15 @@ void NetMonDaemon::run()
     svr_.Post("/login", [this](const httplib::Request& req, httplib::Response& res) {
         try {
             // Parse JSON properly
-            auto json_body = nlohmann::json::parse(req.body);
+            nlohmann::json json_body;
+            try {
+                json_body = nlohmann::json::parse(req.body);
+            } catch (const nlohmann::json::parse_error& e) {
+                log("warn", "Malformed JSON in login request: " + std::string(e.what()));
+                res.status = 400;
+                res.set_content("{\"error\":\"malformed JSON\"}", "application/json");
+                return;
+            }
             
             std::string username = json_body.value("username", "");
             std::string password = json_body.value("password", "");
