@@ -33,7 +33,7 @@ A high-performance, modular network monitoring daemon written in C++17 that capt
 
 ```bash
 # Clone repository
-git clone https://github.com/humanuaction/net-net.git
+git clone https://github.com/humanauction/net-net.git
 cd net-net
 
 # Build daemon
