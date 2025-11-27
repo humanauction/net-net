@@ -28,7 +28,7 @@ _deps/
 netmon
 netmon-ui
 netnet
-test_runner  # ← ADD THIS
+test_runner
 
 # IDE and editor files
 .vscode/
@@ -54,7 +54,7 @@ qrc_*.cpp
 ui_*.h
 
 # Test outputs
-Testing/  # ← Already listed but verify it's working
+Testing/
 tests/output/
 *.log
 
@@ -87,6 +87,7 @@ coverage/
 
 # Linux
 *~
+docs/linuxCheatSheet.md
 
 # Windows
 Thumbs.db

@@ -1,0 +1,200 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ============================================
+  # Job 1: Build and Test on macOS
+  # ============================================
+  build-macos:
+    name: Build & Test (macOS)
+    runs-on: macos-13
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        brew update
+        brew install cmake libpcap yaml-cpp nlohmann-json cpp-httplib openssl sqlite3 googletest
+    
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
+    
+    - name: Build project
+      run: |
+        cd build
+        make -j$(sysctl -n hw.ncpu)
+    
+    - name: Run C++ unit tests
+      run: |
+        cd build
+        ./test_parser
+        ./test_pcap_adapter || true  # May need root
+        ./test_connection_tracker
+        ./test_stats_aggregator
+        ./test_session_manager
+        ./test_stats_aggregator_integration
+        ./test_metrics_endpoint
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest requests pyyaml bcrypt
+    
+    - name: Start daemon (background)
+      run: |
+        sudo ./build/netnet-daemon --config examples/sample-config.yaml &
+        sleep 5  # Wait for daemon to start
+    
+    - name: Run Python integration tests
+      run: |
+        pytest tests/integration/test_authentication.py -v
+        pytest tests/integration/test_api.py -v
+    
+    - name: Stop daemon
+      run: |
+        sudo pkill netnet-daemon || true
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: netnet-macos-binaries
+        path: |
+          build/netnet
+          build/netnet-daemon
+        retention-days: 7
+
+  # ============================================
+  # Job 2: Build and Test on Ubuntu
+  # ============================================
+  build-ubuntu:
+    name: Build & Test (Ubuntu)
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          libpcap-dev \
+          libyaml-cpp-dev \
+          nlohmann-json3-dev \
+          libssl-dev \
+          libsqlite3-dev \
+          libgtest-dev \
+          pkg-config
+        
+        # Install cpp-httplib (not in apt)
+        cd /tmp
+        git clone https://github.com/yhirose/cpp-httplib.git
+        cd cpp-httplib
+        sudo cp httplib.h /usr/local/include/
+    
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+    
+    - name: Build project
+      run: |
+        cd build
+        make -j$(nproc)
+    
+    - name: Run C++ unit tests
+      run: |
+        cd build
+        ./test_parser
+        ./test_connection_tracker
+        ./test_stats_aggregator
+        ./test_session_manager
+        ./test_stats_aggregator_integration
+        ./test_metrics_endpoint
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest requests pyyaml bcrypt
+    
+    - name: Start daemon (background)
+      run: |
+        sudo ./build/netnet-daemon --config examples/sample-config.yaml &
+        sleep 5
+    
+    - name: Run Python integration tests
+      run: |
+        pytest tests/integration/test_authentication.py -v
+        pytest tests/integration/test_api.py -v
+    
+    - name: Stop daemon
+      run: |
+        sudo pkill netnet-daemon || true
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: netnet-ubuntu-binaries
+        path: |
+          build/netnet
+          build/netnet-daemon
+        retention-days: 7
+
+  # ============================================
+  # Job 3: Code Quality Checks
+  # ============================================
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install clang-format
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format
+    
+    - name: Check C++ formatting
+      run: |
+        find src/ include/ tests/ -name "*.cpp" -o -name "*.h" | \
+        xargs clang-format --dry-run --Werror
+      continue-on-error: true
+    
+    - name: Check for TODO/FIXME comments
+      run: |
+        echo "### TODO/FIXME Comments Found:"
+        grep -rn "TODO\|FIXME" src/ tests/ || echo "None found"
+      continue-on-error: true
+    
+    - name: Check Python formatting (flake8)
+      run: |
+        pip install flake8
+        flake8 tests/integration/ --max-line-length=120
+      continue-on-error: true
