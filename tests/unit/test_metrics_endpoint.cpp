@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "../../src/core/StatsAggregator.h"
 #include "../../src/core/ConnectionTracker.h"
-#include "../../src/core/Parser.h"
+#include "../../src/core/parser.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <thread>

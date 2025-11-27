@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "core/Parser.h"
+#include "core/parser.h"
 
 TEST(ParserTest, ParseIPv4TCP) {
     uint8_t pkt[54] = {0};
