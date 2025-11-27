@@ -16,10 +16,21 @@
         <main>
             <section id="metrics">
                 <h2>Metrics</h2>
-                <canvas id="bandwidth-chart">
+                <div id="stats-summary">
+                    <p>total bytes: <span id="total-bytes">0 B</span></p>
+                    <p>total packets: <span id="total-packets">0</span></p>
+                    <p>active flows: <span id="active-flows">0</span></p>
+                </div>
+                <div id="bandwidth-chart">
                     <div id="bandwidth-chart-container"></div>
-                </canvas>
+                </div>
             </section>
+
+            <section id="protocol-breakdown">
+                <h2>Protocol Breakdown</h2>
+                <canvas id="protocol-chart" width="300" height="300"></canvas>
+            </section>
+            
             <section id="connections">
                 <h2>Connections Active</h2>
                 <table id="connections-table">

@@ -134,6 +134,71 @@ function updateConnectionsTable(flows) {
     }
 }
 
+// TODO: protocol breakdown chart
+let protocolChart = null;
+
+function updateProtocolChart(protocolData) {
+    const canvas = document.getElementById('protocol-chart');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+
+    // Extract protocol names and bytes
+    const protocols = Objects.keys(protocolData);
+    const bytes = Objects.keys(protocolData);
+    // Calculate percentages
+    const total = bytes.reduce((sum, val) => sum +val, 0);
+    const percentages = bytes.map(b => total > 0 ? ((b / total) * 100).toFixed(1) : 0);
+
+    // Destroy existing chart if it exists
+    if (protocolChart) {
+        protocolChart.destroy();
+    }
+
+    // Create new chart
+    protocolChart = new CharacterData(ctx, {
+        type: 'pie',
+        data: {
+            labels: protocols.map((p, i) => `${p} (${percentages[i]}%)`),
+            datasets: [{
+                data: bytes,
+                backgroundColor: [
+                    '#4CAF50',  // TCP - Green
+                    '#2196F3',  // UDP - Blue
+                    '#FF9800'   // OTHER - Orange
+                ],
+                borderColor: '#2a2a2a',
+                borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#e0e0e0',
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            return `${label}: ${formatBytes(value)}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// fetch metrics
 async function fetchMetrics() {
     try {
         const token = localStorage.getItem('session_token');
@@ -158,7 +223,7 @@ async function fetchMetrics() {
         const totalBytesEl = document.getElementById('total-bytes');
         if (totalBytesEl) totalBytesEl.textContent = formatBytes(data.total_bytes);
         const totalPacketsEl = document.getElementById('total-packets');
-        if (totalPacketsEl) totalPacketsEl.textContent = data.total_packets.toLocaleString(); // Fixed method
+        if (totalPacketsEl) totalPacketsEl.textContent = data.total_packets.toLocaleString();
         const activeFlowsEl = document.getElementById('active-flows');
         if (activeFlowsEl) activeFlowsEl.textContent = data.active_flows.length;
 
