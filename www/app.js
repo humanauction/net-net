@@ -182,45 +182,109 @@ function formatBytes(bytes) {
 }
 
 async function fetchMetrics() {
-    if (!sessionToken) return;
-
     try {
-        const response = await fetch(`${API_BASE}/metrics`, {
-            headers: { "X-Session-Token": sessionToken },
+        const token = localStorage.getItem('session_token');
+        const response = await fetch('/metrics', {
+            headers: { "X-Session-Token": token },
         });
-
-        if (response.status === 401) {
-            // Session Exiped
-            localStorage.removeItem("session_token");
-            localStorage.removeItem("username");
-            sessionToken = null;
-            showLoginModal();
-            hideDashboard();
-            return;
-        }
-
         if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+            if (response.status === 401) {
+                logout();
+                showLoginModal();
+                hideDashboard();
+                // Session Exiped
+                // localStorage.removeItem("session_token");
+                // localStorage.removeItem("username");
+                // sessionToken = null;
+                return; 
+            }
+            throw new Error('Metric fetch FAILED');
         }
 
         const data = await response.json();
 
+        // Update bandwidth chart
+        updateBandwidthChart(data);
+
+        // Update stats display
+        document.getElementById('total-bytes').textContent = formatBytes(data.total_bytes);
+        document.getElementById('total-packets').textContent = data.total_packets.toLocaleTimeString();
+        document.getElementById('active-flows').textContent = data.active_flows.length;
         // Update status
         document.getElementById("status-text").textContent = "Connected";
         document.getElementById("status-text").style.color = "#4caf50";
-
-        // Add data point
-        const now = new Date().toLocaleTimeString();
-        bandwidthData.push({ time: now, bytes: data.total_bytes || 0 });
-        if (bandwidthData.length > 20) bandwidthData.shift();
-
-        updateBandwidthChart();
-    } catch (err) {
+    } catch (error) {
         console.error("Metrics fetch FAILED: ", err);
         document.getElementById("status-text").textContent = "DISCONNECTED";
         document.getElementById("status-text").style.color = "#f44336";
     }
 }
+
+// Poll metrics every second
+let metricsInterval;
+
+function startMetricsPolling() {
+    fetchMetrics();
+    metricsInterval = setInteral(fetchMetrics, 1000);
+}
+
+function stopMetricsPolling() {
+    if (metricsInterval) {
+        clearInterval(metricsInterval);
+        metricsInterval = null;
+    }
+}
+
+// Update login success handler
+async function login(e) {
+    e.preventDefault();
+
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;   
+
+    try {
+        const response = await fetch('/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({username, password})
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            localStorage.setItem('session_token', data.token);
+            localStorage.setItem('username', data.username);
+
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('current-user').textContent = data.username;
+
+            // starts metrics polling
+            startMetricsPolling();
+        } else {
+            document.getElementById('login-error').textContent = data.error || 'Login FAILED';
+        }
+    } catch (error) {
+        document.getElementById('login-error').textContent = 'Network error';
+    }
+}
+
+
+
+
+
+
+
+
+// Add data point
+        const now = new Date().toLocaleTimeString();
+        bandwidthData.push({ time: now, bytes: data.total_bytes || 0 });
+        if (bandwidthData.length > 20) bandwidthData.shift();
+
+        updateBandwidthChart();
+
 
 function updateBandwidthChart() {
     const x = d3
