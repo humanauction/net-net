@@ -144,8 +144,8 @@ function updateProtocolChart(protocolData) {
     const ctx = canvas.getContext('2d');
 
     // Extract protocol names and bytes
-    const protocols = Objects.keys(protocolData);
-    const bytes = Objects.keys(protocolData);
+    const protocols = Object.keys(protocolData);
+    const bytes = Object.values(protocolData);
     // Calculate percentages
     const total = bytes.reduce((sum, val) => sum +val, 0);
     const percentages = bytes.map(b => total > 0 ? ((b / total) * 100).toFixed(1) : 0);
@@ -156,7 +156,7 @@ function updateProtocolChart(protocolData) {
     }
 
     // Create new chart
-    protocolChart = new CharacterData(ctx, {
+    protocolChart = new Chart(ctx, {
         type: 'pie',
         data: {
             labels: protocols.map((p, i) => `${p} (${percentages[i]}%)`),
@@ -169,10 +169,10 @@ function updateProtocolChart(protocolData) {
                 ],
                 borderColor: '#2a2a2a',
                 borderWidth: 2
-        }]
-    },
-    options: {
-        responsive: true,
+            }]
+        },
+        options: {
+            responsive: true,
             maintainAspectRatio: true,
             plugins: {
                 legend: {
@@ -229,6 +229,11 @@ async function fetchMetrics() {
 
         // update connections table
         updateConnectionsTable(data.active_flows);
+
+        // Update protocol breakdown chart
+        if (data.protocol_breakdown) {
+            updateProtocolChart(data.protocol_breakdown);
+        }
         
         // Update status
         document.getElementById("status-text").textContent = "Connected";
