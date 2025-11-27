@@ -33,7 +33,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor)
 # Core library
 add_library(netnet-core STATIC
     src/core/ConnectionTracker.cpp
-    src/core/Parser.cpp
+    src/core/parser.cpp
     src/net/PcapAdapter.cpp
     src/core/SessionManager.cpp
     src/core/StatsAggregator.cpp
@@ -62,9 +62,9 @@ target_link_libraries(netnet-core
 
 # Main executable (for testing)
 add_executable(netnet
-    src/Main.cpp
+    src/main.cpp
     src/core/ConnectionTracker.cpp
-    src/core/Parser.cpp
+    src/core/parser.cpp
     src/net/PcapAdapter.cpp
     src/core/SessionManager.cpp
     src/core/StatsAggregator.cpp
@@ -105,7 +105,7 @@ target_link_libraries(test_runner
 # TEST Parser
 add_executable(test_parser
     tests/unit/test_parser.cpp
-    src/core/Parser.cpp
+    src/core/parser.cpp
 )
 target_include_directories(test_parser 
     PRIVATE 
@@ -119,7 +119,7 @@ target_link_libraries(test_parser
 # TEST Connection Tracker
 add_executable(test_connection_tracker
     tests/integration/test_connection_tracker.cpp
-    src/core/Parser.cpp
+    src/core/parser.cpp
     src/core/ConnectionTracker.cpp
 )
 target_include_directories(test_connection_tracker
@@ -135,7 +135,7 @@ target_link_libraries(test_connection_tracker
 add_executable(test_stats_aggregator
     tests/unit/test_stats_aggregator.cpp 
     src/core/StatsAggregator.cpp 
-    src/core/Parser.cpp 
+    src/core/parser.cpp 
     src/core/ConnectionTracker.cpp
 )
 target_include_directories(test_stats_aggregator
@@ -170,7 +170,7 @@ target_link_libraries(test_session_manager
 # TEST Aggregator Integration
 add_executable(test_stats_aggregator_integration
     tests/integration/test_stats_aggregator_integration.cpp 
-    src/core/StatsAggregator.cpp src/core/Parser.cpp 
+    src/core/StatsAggregator.cpp src/core/parser.cpp 
     src/core/ConnectionTracker.cpp
 )
 target_include_directories(test_stats_aggregator_integration 
@@ -189,7 +189,7 @@ target_link_libraries(test_stats_aggregator_integration
 # API daemon executable
 add_executable(netnet-daemon
     # src/core/ConnectionTracker.cpp
-    # src/core/Parser.cpp
+    # src/core/parser.cpp
     # src/net/PcapAdapter.cpp
     # src/core/SessionManager.cpp
     # src/core/StatsAggregator.cpp
@@ -224,7 +224,7 @@ add_executable(test_metrics_endpoint
     tests/unit/test_metrics_endpoint.cpp
     src/core/StatsAggregator.cpp
     src/core/ConnectionTracker.cpp
-    src/core/Parser.cpp
+    src/core/parser.cpp
 )
 
 target_include_directories(test_metrics_endpoint 
