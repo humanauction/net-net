@@ -91,23 +91,72 @@ function hideDashboard() {
 
 // Bandwidth chart setup
 let bandwidthData = [];
-const svgWidth = 600,
-    svgHeight = 300;
-const margin = { top: 20, right: 20, bottom: 40, left: 50 };
+const MAX_DATA_POINTS = 60;
+// Initialize D3 chart
 
-const svg = d3
-    .select("#bandwidth-chart")
+const margin = { top: 20, right: 30, bottom: 30, left: 60 };
+const width = 800 - margin.left + margin.right;
+const height = 300 - margin.top - margin.bottom;
+
+const svg = d3.select("#bandwidth-chart")
     .append("svg")
-    .attr("width", svgWidth)
-    .attr("height", svgHeight);
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+    .attr("trandform", `translate(${margin.left},${margin.top})`);
 
-svg.append("g")
-    .attr("class", "x-axis")
-    .attr("transform", `translate(0,${svgHeight - margin.bottom})`);
-svg.append("g")
-    .attr("class", "y-axis")
-    .attr("transform", `translate(${margin.left}, 0)`);
-svg.append("path").attr("class", "line");
+// X, Y scales
+const x = d3.scaleTime().range([0, width]);
+const y = d3.scaleLinear().range([height, 0]);
+
+// Line generator
+const line = d3.line()
+    .x(d => x(d.timestamp))
+    .y(d => y(d.bytes_per_second));
+
+// Append path for line
+const path =  svg.append("path")
+    .attr("class", "line")
+    .attr("fill", "none")
+    .attr("stroke", "#4CAF50")
+    .attr("stroke-width", 2);
+
+// Axes
+const xAxis = svg.append("g")
+    .attr("transform", `translate(0,${height})`);
+const yAxis = svg.append("g");
+
+// y-axis label
+svg.append("text")
+    .attr("transform", "rotate(-90")
+    .attr("y", 0 - margin.left)
+    .attr("x", 0 - (height / 2))
+    .attr("dy", "1em")
+    .style("text-anchor", "middle")
+    .text("Bytes/Second");
+
+function updateBandwidthChart(data) {
+    const now = Date.now();
+
+    // Add new data point
+    bandwidthData.push({
+        timestamp: now,
+        bytes_per_second: data.bytes_per_second || 0
+    });
+
+    // Retain last MAX_DATA_POINTS only
+    if (bandwidthData.length > MAX_DATA_POINTS) {
+        bandwidthData.shift();
+    }
+
+    // Update scales
+
+
+    // Update line
+    
+    
+    // Update axes
+}
 
 async function fetchMetrics() {
     if (!sessionToken) return;
