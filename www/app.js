@@ -89,11 +89,11 @@ function hideDashboard() {
     document.querySelector("main").style.display = "none";
 }
 
-// Bandwidth chart setup
+// Real-time Bandwidth Visualization and Live Data Integration
 let bandwidthData = [];
 const MAX_DATA_POINTS = 60;
-// Initialize D3 chart
 
+// Initialize D3 chart
 const margin = { top: 20, right: 30, bottom: 30, left: 60 };
 const width = 800 - margin.left + margin.right;
 const height = 300 - margin.top - margin.bottom;
