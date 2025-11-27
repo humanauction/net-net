@@ -97,6 +97,43 @@ function formatBytes(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]; // Fixed math
 }
 
+// Table population function
+
+function updateConnectionsTable(flows) {
+    const tbody = document.getElementById('connections-tbody');
+    if (!tbody) return;
+
+    // Clear existing rows
+    tbody.innerHTML = '';
+
+    // Sort by bytes (descending) to show busiest connections first
+    const sortedFlows = flows.sort((a, b) => b.bytes - a.bytes);
+
+    // Populate table with flow data
+    sortedFlows.forEach(flow => {
+        const row = tbody.insertRow();
+
+        row.insertCell(0).textContent = flow.src_ip;
+        row.insertCell(1).textContent = flow.src_port;
+        row.insertCell(2).textContent = flow.dst_ip;
+        row.insertCell(3).textContent = flow.dst_port;
+        row.insertCell(4).textContent = flow.protocol;
+        row.insertCell(5).textContent = formatBytes(flow.bytes);
+        row.insertCell(6).textContent = flow.packets.toLocaleString();    
+    });
+
+    // Show "No active connections" if empty
+    if (flows.length === 0) {
+        const row = tbody.insertRow();
+        const cell = row.insertCell(0);
+        cell.colSpan = 7;
+        cell.textContent = 'No active connections';
+        cell.style.textAlign = 'center';
+        cell.style.fontStyle = 'italic';
+        cell.style.color ='#999';
+    }
+}
+
 async function fetchMetrics() {
     try {
         const token = localStorage.getItem('session_token');
@@ -118,9 +155,15 @@ async function fetchMetrics() {
         updateBandwidthChart(data);
 
         // Update stats display
-        document.getElementById('total-bytes').textContent = formatBytes(data.total_bytes);
-        document.getElementById('total-packets').textContent = data.total_packets.toLocaleString(); // Fixed method
-        document.getElementById('active-flows').textContent = data.active_flows.length;
+        const totalBytesEl = document.getElementById('total-bytes');
+        if (totalBytesEl) totalBytesEl.textContent = formatBytes(data.total_bytes);
+        const totalPacketsEl = document.getElementById('total-packets');
+        if (totalPacketsEl) totalPacketsEl.textContent = data.total_packets.toLocaleString(); // Fixed method
+        const activeFlowsEl = document.getElementById('active-flows');
+        if (activeFlowsEl) activeFlowsEl.textContent = data.active_flows.length;
+
+        // update connections table
+        updateConnectionsTable(data.active_flows);
         
         // Update status
         document.getElementById("status-text").textContent = "Connected";
@@ -133,8 +176,10 @@ async function fetchMetrics() {
 }
 
 function startMetricsPolling() {
+    document.getElementById("status-text").textContent = "Connecting...";
+    document.getElementById("status-text").style.color = "#ff9800";
     fetchMetrics();
-    metricsInterval = setInterval(fetchMetrics, 1000);
+    metricsInterval = setInterval(fetchMetrics, 1000); //Production Alternative: to save bandwidth reduce to 2-3 seconds 
 }
 
 function stopMetricsPolling() {
@@ -208,6 +253,7 @@ async function logout() {
 
     // Clear chart data
     bandwidthData = [];
+    path.datum([]).attr("d", line);
 }
 
 // Initialize on page load

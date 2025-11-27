@@ -23,16 +23,18 @@
             <section id="connections">
                 <h2>Connections Active</h2>
                 <table id="connections-table">
-                    <thread>
+                    <thead>
                         <tr>
-                            <th>Source</th>
-                            <th>Destination</th>
+                            <th>Source IP</th>
+                            <th>Source Port</th>
+                            <th>Destination IP</th>
+                            <th>Destination Port</th>
                             <th>Protocol</th>
                             <th>Bytes</th>
                             <th>Packets</th>
                         </tr>
-                    </thread>
-                    <tbody></tbody>
+                    </thead>
+                    <tbody id="connections-tbody"></tbody>
                 </table>
             </section>
             <!-- Login Modal -->
@@ -43,7 +45,8 @@
                         <input
                             type="text"
                             id="username"
-                            placeholder="Username"
+                            placeholder="username"
+                            autocomplete="username"
                             class="login"
                             required
                         />
