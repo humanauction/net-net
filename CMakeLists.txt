@@ -62,7 +62,7 @@ target_link_libraries(netnet-core
 
 # Main executable (for testing)
 add_executable(netnet
-    src/main.cpp
+    src/Main.cpp
     src/core/ConnectionTracker.cpp
     src/core/parser.cpp
     src/net/PcapAdapter.cpp
