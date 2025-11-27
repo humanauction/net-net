@@ -150,12 +150,35 @@ function updateBandwidthChart(data) {
     }
 
     // Update scales
-
+    x.domain(d3.extent(bandwidthData, d => d.timestamp));
+    y.domain([0, d3.max(bandwidthData, d => d.bytes_per_second) || 1000]);
 
     // Update line
-    
+    path.datun(bandwidthData)
+        .transition()
+        .ducration(500)
+        .attr("d", line);
     
     // Update axes
+    xAxis.transition()
+        .duration(500)
+        .call(d3.axisBottom(x)
+            .ticks(5)
+            .tickFormat(d3.timeFormat("%H:%M:%S")));
+            
+    yAxis.transition()
+        .duration(500)
+        .call(d3.axisLeft(y)
+            .ticks(5)
+            .tickFormat(d => formatBytes(d)));
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100 / 100 + ' ' + sizes[i]);
 }
 
 async function fetchMetrics() {
