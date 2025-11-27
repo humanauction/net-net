@@ -63,26 +63,9 @@ target_link_libraries(netnet-core
 # Main executable (for testing)
 add_executable(netnet
     src/main.cpp
-    src/core/ConnectionTracker.cpp
-    src/core/parser.cpp
-    src/net/PcapAdapter.cpp
-    src/core/SessionManager.cpp
-    src/core/StatsAggregator.cpp
-    src/core/StatsPersistence.cpp
 )
-
-target_include_directories(netnet
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/net
-        ${SQLITE3_INCLUDE_DIRS}
-)
-
 target_link_libraries(netnet
-    PRIVATE
-        netnet-core
-        yaml-cpp
-        ${SQLITE3_LIBRARIES}
+    PRIVATE netnet-core
 )
 
 # Testing setup
