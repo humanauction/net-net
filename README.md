@@ -52,7 +52,7 @@ open http://localhost:8082
 - **Username:** `admin`
 - **Password:** `adminpass`
 
-⚠️ **Change default passwords in production!** See [Configuration](#configuration) section.
+⚠️ **Change default passwords in production!** See [Configuration](#️-configuration) section.
 
 ---
 
