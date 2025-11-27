@@ -1,393 +1,429 @@
 # net-net
 
-Real-Time Network Monitor (C++)
+Real-Time Network Monitor with Web Dashboard
 
 ## Overview
 
-A modular network monitor that captures packets, tracks active connections, and aggregates per-interface bandwidth and protocol statistics. Includes a web-based dashboard for live visualization.
+A high-performance, modular network monitoring daemon written in C++17 that captures packets, tracks active connections, and aggregates bandwidth and protocol statistics in real-time. Features a modern web-based dashboard with live visualizations, session-based authentication, and a REST API for programmatic access.
 
-## Project structure
+**Key Features:**
 
-```bash
-net-net/
-├─ src/
-│  ├─ core/
-│  │  ├─ PacketCapture.cpp
-│  │  ├─ PacketCapture.h
-│  │  ├─ PacketMeta.h
-│  │  ├─ Parser.cpp
-│  │  ├─ Parser.h
-│  │  ├─ ConnectionTracker.cpp
-│  │  ├─ ConnectionTracker.h
-│  │  ├─ StatsAggregator.cpp
-│  │  ├─ StatsAggregator.h
-│  │  ├─ StatsPersistence.cpp
-│  │  ├─ StatsPersistence.h
-│  │  ├─ SessionManager.cpp
-│  │  ├─ SessionManager.h
-│  │  └─ Utils.h
-│  ├─ net/
-│  │  ├─ PcapAdapter.cpp
-│  │  ├─ PcapAdapter.h
-│  │  ├─ RawSocketAdapter.cpp
-│  │  └─ RawSocketAdapter.h
-│  ├─ daemon/
-│  │  ├─ NetMonDaemon.cpp
-│  │  ├─ NetMonDaemon.h
-│  │  └─ ConfigLoader.cpp
-│  └─ Main.cpp
-├─ www/
-│  ├─ index.html
-│  ├─ style.css
-│  └─ app.js
-├─ include/
-│  └─ net-net/   (public headers for library usage)
-│     └─ vendor/  (third-party headers, e.g.  bcrypt)
-│        ├─ bcrypt.h
-│        ├─ bcrypt.cpp
-│        ├─ uuid_gen.h
-│        └─ uuid_gen.cpp
-├─ tests/
-│  ├─ fixtures/
-│  │  ├─ icmp_sample.pcap
-│  │  └─ tcp_sample.pcap
-│  ├─ integration/
-│  │  ├─ test_api.py
-│  │  ├─ test_connection_tracker.cpp
-│  │  └─ test_stats_aggregator_integration.cpp
-│  └─ unit/
-│     ├─ test_parser.cpp
-│     ├─ test_pcap_adapter.cpp
-│     └─ test_stats_aggregator.cpp
-├─ cmake/
-│  └─ modules/
-├─ scripts/
-│  ├─ build.sh
-│  └─ run_tests.sh
-├─ docker/
-│  ├─ Dockerfile
-│  └─ docker-compose.yml
-├─ docs/
-│  ├─ design.md
-│  ├─ EntityRelationshipDataModel.md
-│  ├─ packetFlowDiagram.md
-│  ├─ securityChecklistReview.md
-│  ├─ api.md
-│  └─ perf.md
-├─ examples/
-│  └─ sample-config.yaml
-├─ .vscode/
-│  └─ settings.json
-├─ .venv-netnet/
-│  └─ ... (virtual environment files)
-├─ .clang-format
-├─ make_pcap.py
-├─ CMakeLists.txt
-├─ .gitignore
-└─ README.md
-```
+- 📊 Real-time bandwidth visualization (D3.js line charts)
+- 🔐 Secure session-based authentication with bcrypt
+- 🌐 Modern web dashboard with live updates
+- 📈 Protocol breakdown pie charts (TCP/UDP/OTHER)
+- 🔌 Active connection tracking and display
+- 🛡️ Privilege dropping for security
+- 📦 SQLite persistence for historical data
+- ⚡ Sub-second latency metrics
 
-## Features
+---
 
-- Packet capture via libpcap.
-- Parser for Ethernet, IPv4/IPv6, TCP, UDP, ICMP.
-- Connection tracking with simple state machine.
-- Per-interface, per-protocol bandwidth statistics.
-- Configurable sampling and aggregation windows.
-- Session-based authentication with bcrypt password hashing.
-- User login/logout via REST API.
-- Web-based dashboard with live charts and alerts (D3.js).
-- CLI daemon mode for headless deployments.
+## 🚀 Quick Start
 
-## Requirements
+### Prerequisites
 
-- C++17 or later.
+- **macOS/Linux** with libpcap installed
+- **C++17** compiler (clang++ or g++)
+- **CMake 3.16+**
+- **Python 3.x** with pip (for integration tests)
+- **Root/sudo access** (for packet capture)
 
-- CMake 3.16+.
-
-- libpcap development headers (or root for raw sockets).
-
-- GoogleTest for unit tests.
-
-- Python 3.x with `requests` and `scapy` (for integration tests).
-
-- Modern web browser (for dashboard).
-
-- Docker.
-
-## Quick start
+### Build & Run
 
 ```bash
+# Clone repository
 git clone https://github.com/humanuaction/net-net.git
 cd net-net
-make build
-make run-daemon-online  # Requires elevated privileges for packet capture
+
+# Build daemon
+make clean
+make
+
+# Start daemon (requires sudo for packet capture)
+sudo ./build/netnet-daemon --config examples/sample-config.yaml
+
+# Open dashboard in browser
+open http://localhost:8082
 ```
 
-Open your browser and navigate to:  
-**<http://localhost:8080>**
+### Default Credentials
 
-## Configuration
+- **Username:** `admin`
+- **Password:** `adminpass`
 
-`sample-config.yaml` lists interfaces, capture mode, aggregation window, alert thresholds, and privilege drop options.
+⚠️ **Change default passwords in production!** See [Configuration](#configuration) section.
 
-Example:
+---
+
+## 📸 Screenshots
+
+### Dashboard Overview
+
+![Dashboard](docs/screenshots/dashboard.png)
+*Real-time bandwidth monitoring with protocol breakdown and active connections*
+
+### Login Screen
+
+![Login](docs/screenshots/login.png)
+*Secure session-based authentication*
+
+---
+
+## 🏗️ Architecture
+
+```c++
+┌─────────────────────────────────────────────────────┐
+│                  Web Dashboard                      │
+│         (HTML/CSS/JavaScript + D3.js)              │
+└──────────────────┬──────────────────────────────────┘
+                   │ REST API (HTTP)
+┌──────────────────▼──────────────────────────────────┐
+│              NetMonDaemon (C++)                     │
+│  ┌─────────────────────────────────────────────┐   │
+│  │  SessionManager (bcrypt + SQLite)           │   │
+│  └─────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────┐   │
+│  │  REST API (cpp-httplib)                     │   │
+│  │  • /login, /logout, /metrics                │   │
+│  │  • /control/{start,stop,reload}             │   │
+│  └─────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────┐   │
+│  │  StatsAggregator (Metrics)                  │   │
+│  └─────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────┐   │
+│  │  ConnectionTracker (Flow State)             │   │
+│  └─────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────┐   │
+│  │  Parser (Ethernet/IPv4/TCP/UDP/ICMP)        │   │
+│  └─────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────┐   │
+│  │  PcapAdapter (libpcap wrapper)              │   │
+│  └─────────────────────────────────────────────┘   │
+└─────────────────────┬───────────────────────────────┘
+                      │
+              ┌───────▼────────┐
+              │  Network       │
+              │  Interface     │
+              │  (en0, eth0)   │
+              └────────────────┘
+```
+
+See [docs/design.md](docs/design.md) for detailed architecture documentation.
+
+---
+
+## 📋 Project Structure
+
+```text
+net-net/
+├── src/                          # C++ source code
+│   ├── Main.cpp                  # Entry point
+│   ├── core/                     # Core monitoring logic
+│   │   ├── Parser.{cpp,h}        # Packet parsing (Ethernet→IP→TCP/UDP)
+│   │   ├── ConnectionTracker.{cpp,h}  # Flow tracking
+│   │   ├── StatsAggregator.{cpp,h}    # Metrics aggregation
+│   │   ├── StatsPersistence.{cpp,h}   # SQLite storage
+│   │   ├── SessionManager.{cpp,h}     # Authentication
+│   │   └── PacketMeta.h          # Packet metadata structures
+│   ├── net/                      # Network adapters
+│   │   └── PcapAdapter.{cpp,h}   # libpcap wrapper
+│   └── daemon/                   # Daemon implementation
+│       ├── NetMonDaemon.{cpp,h}  # Main daemon class
+│       └── (ConfigLoader merged into NetMonDaemon)
+├── www/                          # Web dashboard
+│   ├── index.html                # Dashboard UI
+│   ├── style.css                 # Styling
+│   └── app.js                    # JavaScript (D3.js + Chart.js)
+├── include/net-net/vendor/       # Third-party code
+│   ├── bcrypt.{cpp,h}            # Password hashing
+│   └── uuid_gen.{cpp,h}          # Session token generation
+├── tests/                        # Test suites
+│   ├── unit/                     # C++ unit tests (GoogleTest)
+│   ├── integration/              # Integration tests (C++ + Python)
+│   └── fixtures/                 # Test PCAP files
+├── docs/                         # Documentation
+│   ├── design.md                 # Architecture overview
+│   ├── api.md                    # REST API reference
+│   ├── EntityRelationshipDataModel.md  # Database schema
+│   ├── packetFlowDiagram.md      # Packet processing flow
+│   └── securityChecklistReview.md      # Security audit
+├── examples/
+│   └── sample-config.yaml        # Example configuration
+├── CMakeLists.txt                # Build configuration
+├── Makefile                      # Build wrapper
+└── README.md                     # This file
+```
+
+---
+
+## ⚙️ Configuration
+
+All settings configured via YAML. Example: [`examples/sample-config.yaml`](examples/sample-config.yaml)
+
+### Capture Settings
 
 ```yaml
-interface:
-    name: "en0"
-    bpf_filter: "icmp"
-    promiscuous: true
-    snaplen: 65535
-    timeout_ms: 1000
+capture:
+  mode: "live"                    # "live" or "offline"
+  interface: "en0"                # Network interface (live mode)
+  pcap_file: ""                   # PCAP file path (offline mode)
+  bpf_filter: ""                  # BPF filter (e.g., "tcp port 80")
+  promiscuous: false              # Promiscuous mode
+  snaplen: 65535                  # Capture length (bytes)
+  timeout_ms: 1000                # Read timeout
+```
 
-privilege:
-    drop: true
-    user: "nobody"
-    group: "nogroup"
+### API Settings
 
+```yaml
 api:
-    host: "localhost"
-    port: 8080
-    token: "your_secure_token"
+  host: "localhost"
+  port: 8082
+  token: "your_secure_token_here"  # For /control endpoints
+  session_expiry: 3600             # Session timeout (seconds)
+```
 
+### Authentication
+
+```yaml
+users:
+  - username: "admin"
+    password_hash: "$2a$12$..."   # bcrypt hash
+  - username: "user"
+    password_hash: "$2a$12$..."
+```
+
+**Generate bcrypt hashes:**
+
+```bash
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt()).decode())"
+```
+
+### Privilege Drop (Security)
+
+```yaml
+privilege:
+  drop: true
+  user: "nobody"
+  group: "nobody"
+```
+
+### Database
+
+```yaml
 database:
-    path: "netnet.db"
-    retention_days: 7
+  path: "netnet.db"
+  retention_days: 7
+```
 
+### Logging
+
+```yaml
 logging:
-    level: "info"
-    file: ""
-    timestamps: true
+  level: "info"          # debug, info, warning, error
+  file: ""               # Empty = stdout
+  timestamps: true
 ```
 
-**Note:**
+---
 
-- Privilege drop occurs after opening the capture device, before starting the API server.
-- If the specified user/group is invalid or privilege drop fails, the daemon will exit with an error.
+## 🔌 REST API
 
-## Development Milestones
+### Authentication Endpoints
 
-Development broken down into 6 stages, each divided into several tasks. See stages below for related deliverables and focused tests.
+#### POST `/login`
 
-### Stage 0 — Planning and design (Estimate: 2–3 days. Actual: 10 days)
+Authenticate user and receive session token.
 
-**Completed:**
+**Request:**
 
-- ✅ Architecture design documented in `docs/design.md`
-- ✅ Entity-relationship diagram created
-- ✅ Packet flow diagram created
-- ✅ Capture backend selected (libpcap)
-- ✅ Privilege drop model designed
-- ✅ Config schema defined (YAML): interfaces, samplingInterval, aggregationWindow, alertRules
-- ✅ Design review checklist completed
+```json
+{
+  "username": "admin",
+  "password": "adminpass"
+}
+```
 
-See [`docs/design.md`](docs/design.md) for full architecture.
+**Response:**
+
+```json
+{
+  "token": "550e8400-e29b-41d4-a716-446655440000",
+  "username": "admin",
+  "expires_in": 3600
+}
+```
+
+#### POST `/logout`
+
+Invalidate session token.
+
+**Headers:**
+
+```http
+X-Session-Token: <token>
+```
+
+**Response:**
+
+```json
+{
+  "message": "Logged out successfully"
+}
+```
 
 ---
 
-### Stage 1 — Core capture and adapter layer (Estimate: 4–6 days. Actual: 5 days)
+### Metrics Endpoints
 
-**Completed:**
+#### GET `/metrics`
 
-- ✅ Implemented `PcapAdapter` wrapper around libpcap
-- ✅ BPF filter validation and sanitization
-- ✅ Clean, testable API: `startCapture()`, `stopCapture()`, `setFilter()`
-- ✅ Unit tests with mocked adapter
-- ✅ Integration test capturing from pcap file
-- ✅ Test fixtures: [`icmp_sample.pcap`](tests/fixtures/icmp_sample.pcap), [`sample.pcap`](tests/fixtures/sample.pcap)
+Retrieve current network statistics.
 
-**Note:** RawSocketAdapter deferred (libpcap sufficient for target platforms).
+**Headers:**
 
----
+```http
+X-Session-Token: <token>
+```
 
-### Stage 2 — Parser and connection tracker (Estimate: 6–8 days; Actual: 4 days)
+**Response:**
 
-**Completed:**
-
-- ✅ Implemented `Parser` for Ethernet → IPv4/IPv6 → TCP/UDP/ICMP
-- ✅ Implemented `ConnectionTracker` with 5-tuple flow tracking
-- ✅ Connection state tracking (established, closed, idle)
-- ✅ Per-flow and per-interface throughput counters
-- ✅ Unit tests for packet parsing
-- ✅ Integration tests with synthetic pcap files
-
----
-
-### Stage 3 — Stats aggregation and persistence (Estimate: 4–6 days; Actual: 5 days)
-
-**Completed:**
-
-- ✅ Implemented `StatsAggregator` for rolling-window metrics
-- ✅ Configurable aggregation windows (1s, 10s, 60s)
-- ✅ In-memory ring buffer for real-time data
-- ✅ SQLite-backed persistence for historical queries
-- ✅ Unit tests for aggregation math
-- ✅ Integration tests with recorded pcap simulation
-
----
-
-### Stage 4 — CLI daemon + REST API (Estimate:5–7 days; Actual: 9 days)
-
-- ✅ Implement `NetMonDaemon` to run headless.
-- ✅ Add REST API (cpp-httplib) for metrics and control endpoints.
-- ✅ Add authentication token for API access.
-- ✅ Implement rate limiting for control endpoints.
-- ✅ Implement privilege drop after opening capture device.
-- ✅ Configurable logging (level, file, timestamps).
-- ✅ **Session management with bcrypt authentication**
-- ✅ **User login/logout endpoints**
-- ✅ **Session token validation middleware**
+```json
+{
+  "timestamp": 1732656147000,
+  "window_start": 1732656140,
+  "total_bytes": 1048576,
+  "total_packets": 256,
+  "bytes_per_second": 104857,
+  "protocol_breakdown": {
+    "TCP": 900000,
+    "UDP": 148576,
+    "OTHER": 0
+  },
+  "active_flows": [
+    {
+      "src_ip": "192.168.1.100",
+      "src_port": 54321,
+      "dst_ip": "142.250.80.46",
+      "dst_port": 443,
+      "protocol": "TCP",
+      "bytes": 15360,
+      "packets": 45
+    }
+  ]
+}
+```
 
 ---
 
-### Stage 5 — Web dashboard and authentication UI (Estimate: 6–10 days; Actual: In Progress)
+### Control Endpoints
 
-**Completed:**
+#### POST `/control/start`
 
-- ✅ Web-based dashboard using HTML/CSS/JavaScript
-- ✅ Dashboard served via REST API at `/` (static files)
-- ✅ Backend session management and authentication
+Start packet capture.
 
-**In Progress:**
+**Headers:**
 
-- ✅ Frontend login form
-- ✅ Session token storage (localStorage)
-- ✅ Authenticated API requests with X-Session-Token header
-- ✅ Logout button and session expiry handling
+```http
+Authorization: Bearer <api_token>
+```
 
-**Pending:**
+#### POST `/control/stop`
 
-- 🔄 Real-time bandwidth visualization (D3.js)
-- 🔄 Active connections table
-- 🔄 Protocol breakdown charts
-- 🔄 Alert threshold configuration UI
+Stop packet capture.
 
----
+#### POST `/control/reload`
 
-### Stage 6 — Hardening, CI, docs and deployment (Estimate: 3–5 days; Actual: Pending)
+Reload configuration file.
 
-- Add GoogleTest unit suite; CI pipeline (GitHub Actions) to run tests and lint.
+**Note:** Control endpoints require API token (not session token).
 
-- Add sanitizer builds (ASan/UBSan) for debug CI.
-
-- Add Dockerfile for daemon mode.
-
-- Finalize docs, example configs, concise README.
+See [docs/api.md](docs/api.md) for complete API documentation.
 
 ---
 
-## Interfaces and Key Classes (API Sketch)
+## 🧪 Testing
 
-### PcapAdapter
-
-- `start(iface_or_file, bpf_filter, packetCallback)`
-- `stop()`
-
-### Parser
-
-- `parse(rawPacket) -> PacketMeta`  
-     Returns: `{ timestamp, iface, layers... }`
-
-### ConnectionTracker
-
-- `ingest(PacketMeta)`
-- `getActiveConnections() -> std::vector<FlowInfo>`
-
-### StatsAggregator
-
-- `ingest(ConnectionEvent)`
-- `getMetrics(window) -> MetricsJson`
-
-### NetMonDaemon
-
-- `loadConfig(path)`
-- `run()`
-- REST API: `/metrics`, `/control/start`, `/control/stop`, `/control/reload` (token required)
-- Static files served from `www/`
-
-### Web Dashboard
-
-- Real-time charts with D3.js
-- Fetches data from REST API (`/metrics`)
-- Interactive UI for alerts and connection tracking
-
----
-
-## Testing, security, deployment, future development, notes (mostly to self)
-
-### Testing
-
-- Use recorded pcap files for deterministic integration tests.
-- Mock adapters for unit tests.
-- Add fuzz tests for parser with malformed packet samples.
-
-### Security
-
-- Run capture code with minimal privileges; **drop to unprivileged user/group after opening capture device**.
-- Configured privilege drop in `sample-config.yaml`
-- Sanitized config input; REST API protection via tokens.
-- BPF filter validation prevents injection attacks.
-- Rate limiting for control endpoints.
-- Configurable logging (no sensitive data logged).
-
-### Deployment
-
-- Docker for daemon mode with `CAP_NET_RAW` capability.
-- Web dashboard accessible via any modern browser.
-
----
-
-## Test Fixtures
-
-### icmp_sample.pcap
-
-10 ICMP echo request/reply packets captured from localhost.
-
-**To regenerate:**
+### Run All Tests
 
 ```bash
-sudo tcpdump -i lo0 -w tests/fixtures/icmp_sample.pcap &
-ping -c 5 127.0.0.1
-sudo killall tcpdump
+make test
 ```
 
-**To inspect:**
+### C++ Unit Tests (GoogleTest)
 
 ```bash
-tcpdump -nnr tests/fixtures/icmp_sample.pcap
-tcpdump -xx -r tests/fixtures/icmp_sample.pcap
+./build/test_runner
 ```
 
-### sample.pcap
+**Test Suites:**
 
-10 TCP SYN packets from 10.0.0.1:1234 to 10.0.0.2:80 (synthetic, for integration tests).
+- `test_parser` - Packet parsing logic
+- `test_pcap_adapter` - Capture adapter
+- `test_connection_tracker` - Flow tracking
+- `test_stats_aggregator` - Metrics aggregation
+- `test_session_manager` - Authentication
 
-**To regenerate:**
+### Integration Tests (Python)
 
 ```bash
-sudo tcpdump -i lo0 tcp and host 10.0.0.1 and port 80 -c 10 -w tests/fixtures/sample.pcap
+# Start daemon first
+sudo ./build/netnet-daemon --config examples/sample-config.yaml &
+
+# Run Python tests
+source .venv-netnet/bin/activate
+pytest tests/integration/ -v
+
+# Kill daemon
+sudo pkill netnet-daemon
 ```
 
-**To inspect:**
+**Test Coverage:**
 
-```bash
-tcpdump -nnr tests/fixtures/sample.pcap
-tcpdump -xx -r tests/fixtures/sample.pcap
-```
+- ✅ 6 C++ unit test suites
+- ✅ 16 Python integration tests
+- ✅ Authentication (login, logout, token validation)
+- ✅ API endpoints (metrics, control)
+- ✅ Security (SQL injection, XSS, rate limiting)
+- ✅ Concurrency (session expiry, cleanup)
+
+---
+
+## 🔒 Security
+
+### Implemented Safeguards
+
+- ✅ **Privilege Dropping:** Daemon drops to `nobody:nobody` after opening capture device
+- ✅ **bcrypt Password Hashing:** All passwords hashed with salt (cost factor: 12)
+- ✅ **Session Tokens:** UUID-based tokens, SQLite-backed, configurable expiry
+- ✅ **Rate Limiting:** Control endpoints limited to 1 request per 2 seconds per IP
+- ✅ **Input Validation:** BPF filter sanitization, JSON schema validation
+- ✅ **No Credential Logging:** Passwords never logged or displayed
+- ✅ **HTTPS Ready:** Daemon designed for reverse proxy (nginx/Caddy) with TLS
+
+### Production Checklist
+
+- [ ] Change default passwords
+- [ ] Use strong API tokens (32+ characters)
+- [ ] Enable HTTPS via reverse proxy
+- [ ] Restrict API access by IP/firewall
+- [ ] Run daemon as dedicated user (not `nobody`)
+- [ ] Enable audit logging
+- [ ] Review [`docs/securityChecklistReview.md`](docs/securityChecklistReview.md)
 
 ---
 
 ## 🐛 Troubleshooting
 
-Error: "Permission denied" when opening interface
+### Permission Denied
 
 ```bash
-# Run with sudo
+# Run with sudo (required for packet capture)
 sudo ./build/netnet-daemon --config examples/sample-config.yaml
 ```
 
-Error: "Address already in use"
+### Port Already in Use
 
 ```bash
 # Kill existing daemon
@@ -398,43 +434,189 @@ api:
   port: 8082  # Change from 8080
 ```
 
-Error: "Could not open device en0"
+### Interface Not Found
 
 ```bash
-# Check available interfaces
-ifconfig
+# List available interfaces
+ifconfig -a
 
 # Update config with correct interface
 capture:
   interface: "en0"  # Change to your active interface
 ```
 
-Check daemon logs:
+### Dashboard Shows "Connection Refused"
+
+1. Check daemon is running: `ps aux | grep netnet-daemon`
+2. Check port: `lsof -i :8082`
+3. Check logs: `tail -f /var/log/netnet-daemon.log`
+4. Verify config: `cat examples/sample-config.yaml`
+
+### Session Token Invalid
 
 ```bash
-tail -f /tmp/netnet-daemon.log
+# Clear browser localStorage
+# Open browser console (F12):
+localStorage.clear()
+
+# Or delete session database
+rm -f netnet.db.sessions
 ```
 
-Test API endpoints:
+### API Returns 401 Unauthorized
 
 ```bash
-# Login
-curl -X POST http://localhost:8080/login \
+# Test login endpoint
+curl -X POST http://localhost:8082/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"adminpass"}'
 
-# Expected response:
-# {"token":"<uuid>","username":"admin","expires_in":3600}
+# If login fails, check password hash in config
 ```
 
-Open web UI:
+---
+
+## 📚 Documentation
+
+- [Architecture & Design](docs/design.md)
+- [REST API Reference](docs/api.md)
+- [Database Schema](docs/EntityRelationshipDataModel.md)
+- [Packet Processing Flow](docs/packetFlowDiagram.md)
+- [Security Audit](docs/securityChecklistReview.md)
+
+---
+
+## 🛠️ Development Roadmap
+
+### ✅ Stage 0: Planning & Design (Complete)
+
+- Architecture design
+- Entity-relationship diagram
+- Packet flow diagram
+- Config schema definition
+
+### ✅ Stage 1: Core Capture Layer (Complete)
+
+- PcapAdapter implementation
+- BPF filter validation
+- Unit tests with mocked adapter
+- Integration tests with PCAP files
+
+### ✅ Stage 2: Parser & Connection Tracker (Complete)
+
+- Multi-protocol parser (Ethernet/IPv4/IPv6/TCP/UDP/ICMP)
+- 5-tuple flow tracking
+- Connection state machine
+- Per-flow throughput counters
+
+### ✅ Stage 3: Stats Aggregation & Persistence (Complete)
+
+- Rolling-window metrics
+- In-memory ring buffer
+- SQLite persistence
+- Configurable aggregation windows
+
+### ✅ Stage 4: CLI Daemon & REST API (Complete)
+
+- NetMonDaemon headless mode
+- REST API with cpp-httplib
+- Session-based authentication
+- Rate limiting
+- Privilege dropping
+- Configurable logging
+
+### ✅ Stage 5: Web Dashboard & UI (Complete)
+
+- HTML/CSS/JavaScript frontend
+- Real-time bandwidth chart (D3.js)
+- Protocol breakdown pie chart (Chart.js)
+- Active connections table
+- Login/logout UI
+- Session token management
+
+### 🔄 Stage 6: Hardening, CI, Docs (In Progress)
+
+- [ ] CI/CD pipeline (GitHub Actions)
+- [ ] Code coverage reporting (gcov/lcov)
+- [ ] Sanitizer builds (ASan/UBSan/TSan)
+- [ ] Docker support with health checks
+- [ ] Performance benchmarks
+- [ ] Deployment guide (systemd/Docker)
+- [ ] Troubleshooting guide
+- [ ] Contributing guide
+
+---
+
+## 🚢 Deployment
+
+### systemd Service (Linux)
 
 ```bash
-open https://localhost:8080
+# Copy service file
+sudo cp scripts/netnet-daemon.service /etc/systemd/system/
+
+# Enable and start
+sudo systemctl enable netnet-daemon
+sudo systemctl start netnet-daemon
+
+# Check status
+sudo systemctl status netnet-daemon
 ```
 
-Clean up old Database:
+### Docker (Coming Soon)
 
 ```bash
-rm -f netnet.db netnet.db.sessions
+# Build image
+docker build -t netnet:latest .
+
+# Run with host network (for packet capture)
+docker run --rm --net=host --cap-add=NET_RAW \
+  -v $(pwd)/examples/sample-config.yaml:/etc/netnet/config.yaml \
+  netnet:latest
 ```
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+**Before submitting:**
+
+- Run tests: `make test`
+- Check formatting: `clang-format -i src/**/*.cpp src/**/*.h`
+- Update documentation if needed
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- [libpcap](https://www.tcpdump.org/) - Packet capture
+- [cpp-httplib](https://github.com/yhirose/cpp-httplib) - HTTP server
+- [yaml-cpp](https://github.com/jbeder/yaml-cpp) - YAML parsing
+- [nlohmann/json](https://github.com/nlohmann/json) - JSON handling
+- [GoogleTest](https://github.com/google/googletest) - Unit testing
+- [D3.js](https://d3js.org/) - Data visualization
+- [Chart.js](https://www.chartjs.org/) - Pie charts
+- [bcrypt](https://en.wikipedia.org/wiki/Bcrypt) - Password hashing
+
+---
+
+## 📧 Contact
+
+- **GitHub Issues:** [github.com/humanauction/net-net/issues](https://github.com/humanauction/net-net/issues)
+- **Email:** [humanauction@gmail.com](mailto:humanauction@gmail.com)
+
+---

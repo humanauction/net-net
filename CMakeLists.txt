@@ -218,3 +218,25 @@ target_link_libraries(netnet-daemon
         # OpenSSL::SSL
         # OpenSSL::Crypto
 )
+
+# Unit test: Metrics endpoint
+add_executable(test_metrics_endpoint 
+    tests/unit/test_metrics_endpoint.cpp
+    src/core/StatsAggregator.cpp
+    src/core/ConnectionTracker.cpp
+    src/core/Parser.cpp
+)
+
+target_include_directories(test_metrics_endpoint 
+    PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_metrics_endpoint 
+    GTest::gtest_main 
+    nlohmann_json::nlohmann_json
+    pcap
+    pthread
+)
+add_test(NAME test_metrics_endpoint COMMAND test_metrics_endpoint)
+
