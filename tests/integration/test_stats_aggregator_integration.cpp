@@ -12,7 +12,7 @@ TEST(StatsAggregatorIntegrationTest, AggregatesPcapReplay) {
     // Open sample pcap file
     char errbuf[PCAP_ERRBUF_SIZE];
     pcap_t* handle = pcap_open_offline("tests/fixtures/sample.pcap", errbuf);
-    ASSERT_TRUE(handle != nullptr);
+    ASSERT_TRUE(handle != nullptr) << "Failed to open pcap file: " << errbuf;
 
     struct pcap_pkthdr* header;
     const u_char* data;
