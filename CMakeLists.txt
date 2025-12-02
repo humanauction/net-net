@@ -237,8 +237,9 @@ target_link_libraries(netnet-daemon
         nlohmann_json::nlohmann_json
         # ${PCAP_LIBRARIES}
         ${SQLITE3_LIBRARIES}
-        # OpenSSL::SSL
-        # OpenSSL::Crypto
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        ${EXTRA_LIBS}
 )
 
 # Unit test: Metrics endpoint
