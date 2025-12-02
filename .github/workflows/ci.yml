@@ -74,10 +74,23 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest requests pyyaml bcrypt
 
-    - name: Start daemon (background)
+    - name: Start netnet-daemon
       run: |
         sudo ./build/netnet-daemon --config examples/sample-config.yaml &
         sleep 5
+
+    - name: Wait for /login endpoint
+      run: |
+        for i in {1..10}; do
+          if curl -sSf http://localhost:8082/login > /dev/null; then
+            echo "Daemon is up!"
+            exit 0
+          fi
+          echo "Waiting for daemon..."
+          sleep 2
+        done
+        echo "Daemon did not start in time." >&2
+        exit 1
 
     - name: Run Python integration tests
       run: |
