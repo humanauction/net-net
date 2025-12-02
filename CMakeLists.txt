@@ -171,7 +171,7 @@ target_include_directories(test_session_manager PRIVATE
 if(APPLE)
     SET(EXTRA_LIBS "")
 else()
-    SET(EXTRA_LIBS uuid)
+    SET(EXTRA_LIBS uuid crypt)
 endif()
 
 target_link_libraries(test_session_manager 
