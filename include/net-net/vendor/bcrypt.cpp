@@ -2,8 +2,10 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
-#ifdef __linux__
+#if defined(__linux__)
 #include <crypt.h>
+#elif defined(__APPLE__)
+#include <unistd.h>
 #endif
 #include <cstring>
 #include <sstream>
@@ -49,8 +51,11 @@ bool verify(const std::string& password, const std::string& stored_hash) {
          stored_hash.substr(0, 4) == "$2b$" ||
          stored_hash.substr(0, 4) == "$2y$")) {
         
-        // Use system bcrypt (crypt_r on Linux, bcrypt on OpenBSD/macOS)
+        // Use system bcrypt (crypt_r on Linux, crypt on macOS)
         #ifdef __APPLE__
+            // macOS does not have crypt_r, use crypt
+            char* result = crypt(password.c_str(), stored_hash.c_str());
+            return result && stored_hash == result;
         #elif defined(__linux__)
             struct crypt_data data;
             data.initialized = 0;
