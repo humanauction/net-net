@@ -40,7 +40,7 @@ jobs:
       run: |
         cd build
         ./test_parser
-        ./test_pcap_adapter || true  # May need root
+        ./test_pcap_adapter || true
         ./test_connection_tracker
         ./test_stats_aggregator
         ./test_session_manager

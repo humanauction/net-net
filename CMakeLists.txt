@@ -83,14 +83,22 @@ target_link_libraries(netnet
 enable_testing()
 find_package(GTest REQUIRED)
 
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/config.h
+)
+
 # Testing source directory
-add_definitions(-DCMAKE_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\")
+# add_definitions(-DCMAKE_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\")
 
 # API daemon executable
 # Test runner
 add_executable(test_runner
     tests/unit/test_pcap_adapter.cpp
 )
+
+target_include_directories(test_runner PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
 target_link_libraries(test_runner 
     PRIVATE 
         netnet-core GTest::gtest GTest::gtest_main pthread

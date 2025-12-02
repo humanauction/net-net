@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "../../src/net/PcapAdapter.h"
+#include "../../CMake/config.h"
 #include <thread>
 #include <chrono>
 
@@ -16,7 +17,7 @@ TEST(PcapAdapterTest, ConstructorValid) {
 
 TEST(PcapAdapterTest, OfflineMode) {
     PcapAdapter::Options opts;
-    opts.iface_or_file = std::string(CMAKE_SOURCE_DIR) + "/tests/fixtures/icmp_sample.pcap";
+    opts.iface_or_file = std::string(PROJECT_SOURCE_DIR) + "/tests/fixtures/icmp_sample.pcap";
     opts.read_offline = true;
     
     PcapAdapter adapter(opts);
