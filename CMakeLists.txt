@@ -64,8 +64,19 @@ target_link_libraries(netnet-core
 add_executable(netnet
     src/main.cpp
 )
+
+target_include_directories(netnet
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/net
+        ${SQLITE3_INCLUDE_DIRS}
+)
+
 target_link_libraries(netnet
-    PRIVATE netnet-core
+    PRIVATE 
+        netnet-core
+        yaml-cpp
+        ${SQLITE3_LIBRARIES}
 )
 
 # Testing setup
@@ -73,7 +84,7 @@ enable_testing()
 find_package(GTest REQUIRED)
 
 # Testing source directory
-add_definitions(-DCMAKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_definitions(-DCMAKE_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\")
 
 # API daemon executable
 # Test runner

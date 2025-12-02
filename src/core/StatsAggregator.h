@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <vector>
 #include "core/ConnectionTracker.h"
-#include "core/parser.h"
+#include "core/Parser.h"
 
 // Aggregated stats for a time window
 struct AggregatedStats {
