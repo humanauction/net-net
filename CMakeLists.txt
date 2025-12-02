@@ -19,13 +19,11 @@ find_package(nlohmann_json REQUIRED)
 
 # Find or add cpp-httplib
 find_path(HTTPLIB_INCLUDE_DIR httplib.h
-    PATHS /usr/local/include /opt/homebrew/include
+    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
 )
 if(NOT HTTPLIB_INCLUDE_DIR)
     message(FATAL_ERROR "httplib.h not found. Install: brew install cpp-httplib")
 endif()
-
-include_directories(${HTTPLIB_INCLUDE_DIR})
 
 # Environment flags
 include_directories($ENV{CPPFLAGS})
@@ -34,10 +32,6 @@ link_directories($ENV{LDFLAGS})
 # libxcrypt flags
 include_directories(/usr/local/opt/libxcrypt/include)
 link_directories(/usr/local/opt/libxcrypt/lib)
-
-
-# Vendor include dir
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor)
 
 # Core library
 add_library(netnet-core STATIC
@@ -54,10 +48,10 @@ add_library(netnet-core STATIC
 target_include_directories(netnet-core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
     PRIVATE
         ${PCAP_INCLUDE_DIRS}
         ${SQLITE3_INCLUDE_DIRS}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor    
 )
 
 target_link_libraries(netnet-core
@@ -78,6 +72,7 @@ target_include_directories(netnet
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/net
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
         ${SQLITE3_INCLUDE_DIRS}
 )
 
@@ -97,16 +92,15 @@ configure_file(
     ${CMAKE_CURRENT_BINARY_DIR}/config.h
 )
 
-# Testing source directory
-# add_definitions(-DCMAKE_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\")
-
-# API daemon executable
 # Test runner
 add_executable(test_runner
     tests/unit/test_pcap_adapter.cpp
 )
 
-target_include_directories(test_runner PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(test_runner PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
+)
 
 target_link_libraries(test_runner 
     PRIVATE 
@@ -121,6 +115,7 @@ add_executable(test_parser
 target_include_directories(test_parser 
     PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
 )
 target_link_libraries(test_parser 
     PRIVATE 
@@ -135,7 +130,8 @@ add_executable(test_connection_tracker
 )
 target_include_directories(test_connection_tracker
     PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
 )
 target_link_libraries(test_connection_tracker 
     PRIVATE 
@@ -150,7 +146,9 @@ add_executable(test_stats_aggregator
     src/core/ConnectionTracker.cpp
 )
 target_include_directories(test_stats_aggregator
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
 )
 target_link_libraries(test_stats_aggregator
     PRIVATE GTest::gtest GTest::gtest_main pthread
@@ -166,6 +164,7 @@ add_executable(test_session_manager
 target_include_directories(test_session_manager PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
 )
 
 if(APPLE)
@@ -198,6 +197,7 @@ target_include_directories(test_stats_aggregator_integration
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
 )
 target_link_libraries(test_stats_aggregator_integration 
     PRIVATE 
@@ -207,25 +207,16 @@ target_link_libraries(test_stats_aggregator_integration
         ${PCAP_LIBRARIES}
 )
 
-
 # API daemon executable
 add_executable(netnet-daemon
-    # src/core/ConnectionTracker.cpp
-    # src/core/parser.cpp
-    # src/net/PcapAdapter.cpp
-    # src/core/SessionManager.cpp
-    # src/core/StatsAggregator.cpp
-    # src/core/StatsPersistence.cpp
     src/daemon/NetMonDaemon.cpp
 )
 
 target_include_directories(netnet-daemon
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        # ${CMAKE_CURRENT_SOURCE_DIR}/src/core
-        # ${CMAKE_CURRENT_SOURCE_DIR}/src/net
         ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
-        ${HTTPLIB_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
         ${SQLITE3_INCLUDE_DIRS}
 )
 
@@ -253,6 +244,7 @@ add_executable(test_metrics_endpoint
 target_include_directories(test_metrics_endpoint 
     PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
 )
 
 target_link_libraries(test_metrics_endpoint 
