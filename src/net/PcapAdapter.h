@@ -4,6 +4,7 @@
 #include <string>
 #include <chrono>
 #include <memory>
+#include <atomic>
 #include "../core/PacketMeta.h"
 
 using PacketCallback = std::function<void(const PacketMeta&, const uint8_t*, size_t)>;

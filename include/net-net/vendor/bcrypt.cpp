@@ -2,6 +2,9 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
+#ifdef __linux__
+#include <crypt.h>
+#endif
 #include <cstring>
 #include <sstream>
 #include <iomanip>
@@ -48,13 +51,13 @@ bool verify(const std::string& password, const std::string& stored_hash) {
         
         // Use system bcrypt (crypt_r on Linux, bcrypt on OpenBSD/macOS)
         #ifdef __APPLE__
-            // macOS doesn't have crypt_r, use a proper bcrypt library instead
-            throw std::runtime_error("Standard bcrypt not supported - use PBKDF2 format or install libbcrypt");
-        #else
+        #elif defined(__linux__)
             struct crypt_data data;
             data.initialized = 0;
             char* result = crypt_r(password.c_str(), stored_hash.c_str(), &data);
             return result && stored_hash == result;
+        #else
+            throw std::runtime_error("Standard bcrypt not supported on this platform - use PBKDF2 format or install libcrypt");
         #endif
     }
     

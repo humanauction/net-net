@@ -27,6 +27,15 @@ endif()
 
 include_directories(${HTTPLIB_INCLUDE_DIR})
 
+# Environment flags
+include_directories($ENV{CPPFLAGS})
+link_directories($ENV{LDFLAGS})
+
+# libxcrypt flags
+include_directories(/usr/local/opt/libxcrypt/include)
+link_directories(/usr/local/opt/libxcrypt/lib)
+
+
 # Vendor include dir
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor)
 
@@ -244,4 +253,5 @@ target_link_libraries(test_metrics_endpoint
     pthread
 )
 add_test(NAME test_metrics_endpoint COMMAND test_metrics_endpoint)
+
 
