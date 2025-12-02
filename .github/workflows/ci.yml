@@ -24,7 +24,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           build-essential cmake libpcap-dev libyaml-cpp-dev nlohmann-json3-dev \
-          libssl-dev libsqlite3-dev libgtest-dev pkg-config clang-format
+          libssl-dev libsqlite3-dev libgtest-dev pkg-config clang-format libxcrypt-dev uuid-dev
         cd /tmp
         git clone https://github.com/yhirose/cpp-httplib.git
         cd cpp-httplib

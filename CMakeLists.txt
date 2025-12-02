@@ -168,6 +168,12 @@ target_include_directories(test_session_manager PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+if(APPLE)
+    SET(EXTRA_LIBS "")
+else()
+    SET(EXTRA_LIBS uuid)
+endif()
+
 target_link_libraries(test_session_manager 
     PRIVATE 
         GTest::gtest 
@@ -176,6 +182,8 @@ target_link_libraries(test_session_manager
         ${SQLITE3_LIBRARIES}
         OpenSSL::SSL
         OpenSSL::Crypto
+        crypt
+        ${EXTRA_LIBS}
 )
 
 # TEST Aggregator Integration
