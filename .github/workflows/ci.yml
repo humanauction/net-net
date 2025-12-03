@@ -102,8 +102,9 @@ jobs:
     - name: Wait for /login endpoint
       run: |
         for i in {1..30}; do
-          if curl -sSf http://localhost:8082/login > /dev/null; then
-            echo "Daemon is up!"
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/login || echo 000)
+          if [ "$status" = "200" ] || [ "$status" = "404" ]; then
+            echo "Daemon is up! (status: $status)"
             exit 0
           fi
           echo "Waiting for daemon..."
