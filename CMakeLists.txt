@@ -36,9 +36,10 @@ include_directories($ENV{CPPFLAGS})
 link_directories($ENV{LDFLAGS})
 
 # libxcrypt flags
-if(NOT APPLE)
-    include_directories(/usr/local/opt/libxcrypt/include)
-    link_directories(/usr/local/opt/libxcrypt/lib)
+if(UNIX AND NOT APPLE)
+    set(EXTRA_LIBS crypt uuid)
+else()
+    set(EXTRA_LIBS "")
 endif()
 
 # Core library
@@ -69,6 +70,7 @@ target_link_libraries(netnet-core
         OpenSSL::SSL
         OpenSSL::Crypto        
         pthread
+        ${EXTRA_LIBS}
 )
 
 # Main executable (for testing)
@@ -89,6 +91,7 @@ target_link_libraries(netnet
         netnet-core
         yaml-cpp
         ${SQLITE3_LIBRARIES}
+        ${EXTRA_LIBS}
 )
 
 # Testing setup
@@ -113,6 +116,7 @@ target_include_directories(test_runner PRIVATE
 target_link_libraries(test_runner 
     PRIVATE 
         netnet-core GTest::gtest GTest::gtest_main pthread
+        ${EXTRA_LIBS}
 )
 
 # TEST Parser
@@ -128,6 +132,7 @@ target_include_directories(test_parser
 target_link_libraries(test_parser 
     PRIVATE 
         GTest::gtest GTest::gtest_main
+        ${EXTRA_LIBS}
 )
 
 # TEST Connection Tracker
@@ -144,6 +149,7 @@ target_include_directories(test_connection_tracker
 target_link_libraries(test_connection_tracker 
     PRIVATE 
         GTest::gtest GTest::gtest_main pthread
+        ${EXTRA_LIBS}
 )
 
 # TEST Stats Aggregator
@@ -160,6 +166,7 @@ target_include_directories(test_stats_aggregator
 )
 target_link_libraries(test_stats_aggregator
     PRIVATE GTest::gtest GTest::gtest_main pthread
+    ${EXTRA_LIBS}
 )
 
 # TEST Session Management
@@ -175,12 +182,6 @@ target_include_directories(test_session_manager PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
 )
 
-if(APPLE)
-    SET(EXTRA_LIBS "")
-else()
-    SET(EXTRA_LIBS uuid crypt)
-endif()
-
 target_link_libraries(test_session_manager 
     PRIVATE 
         GTest::gtest 
@@ -189,7 +190,6 @@ target_link_libraries(test_session_manager
         ${SQLITE3_LIBRARIES}
         OpenSSL::SSL
         OpenSSL::Crypto
-        crypt
         ${EXTRA_LIBS}
 )
 
@@ -213,6 +213,7 @@ target_link_libraries(test_stats_aggregator_integration
         GTest::gtest_main 
         pthread 
         ${PCAP_LIBRARIES}
+        ${EXTRA_LIBS}
 )
 
 # API daemon executable
@@ -234,7 +235,6 @@ target_link_libraries(netnet-daemon
         yaml-cpp
         pthread
         nlohmann_json::nlohmann_json
-        # ${PCAP_LIBRARIES}
         ${SQLITE3_LIBRARIES}
         OpenSSL::SSL
         OpenSSL::Crypto
@@ -260,6 +260,7 @@ target_link_libraries(test_metrics_endpoint
     nlohmann_json::nlohmann_json
     pcap
     pthread
+    ${EXTRA_LIBS}
 )
 add_test(NAME test_metrics_endpoint COMMAND test_metrics_endpoint)
 
