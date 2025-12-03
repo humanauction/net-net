@@ -8,7 +8,7 @@ import yaml
 
 #  Test Configuration
 BASE_URL = "http://localhost:8082"
-CONFIG_PATH = "examples/sample-config.yaml"
+CONFIG_PATH = "examples/sample-config.ci.yaml"
 DAEMON_PATH = "./build/netnet-daemon"
 
 

@@ -36,8 +36,8 @@ jobs:
         brew update
         brew install cmake libpcap yaml-cpp nlohmann-json cpp-httplib openssl sqlite3 googletest
     
-    - name: Set libxcrypt environment variables (macOS)
-      if: runner.os == 'macOS'
+    - name: Set libxcrypt environment variables (linux)
+      if: runner.os == 'linux'
       run: |
         echo "CPPFLAGS=-I/usr/local/opt/libxcrypt/include" >> $GITHUB_ENV
         echo "LDFLAGS=-L/usr/local/opt/libxcrypt/lib" >> $GITHUB_ENV
@@ -74,14 +74,30 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest requests pyyaml bcrypt
 
+    - name: Set interface env variable
+      run: |
+        if ["${{ runner.os }}" = "macOS"]; then
+          echo "NETNET_IFACE=lo0" >> $GITHUB_ENV
+        else
+          echo "NETNET_IFACE=lo" >> $GITHUB_ENV
+        fi
+
+    - name: Patch config for interface
+      run: |
+        envsubst < examples/sample-config.yaml > examples/sample-config.ci.yaml
+
     - name: Start netnet-daemon
       run: |
-        sudo ./build/netnet-daemon --config examples/sample-config.yaml &
+        sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml > /tmp/netnet-daemon.log 2>&1 &
         sleep 5
+
+    - name: Print daemon logs
+      run: |
+        cat /tmp/netnet-daemon.log || true
 
     - name: Wait for /login endpoint
       run: |
-        for i in {1..10}; do
+        for i in {1..30}; do
           if curl -sSf http://localhost:8082/login > /dev/null; then
             echo "Daemon is up!"
             exit 0
@@ -91,6 +107,12 @@ jobs:
         done
         echo "Daemon did not start in time." >&2
         exit 1
+
+    - name: Print daemon log failure
+      if: failure()
+      run: |
+        echo "==== netnet-daemon-log ===="
+        cat tmp/netnet-daemon.log || echo "No log found"
 
     - name: Run Python integration tests
       run: |

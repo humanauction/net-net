@@ -34,13 +34,20 @@ build:
 	cmake -S . -B build -G "Unix Makefiles"
 	cmake --build build
 
+NETNET_IFACE ?= lo0
+
+config-ci:
+	env NETNET_IFACE=$(NETNET_IFACE) envsubst < examples/sample-config.yaml > examples/sample-config.ci.yaml
+
 run-daemon-online:
-	sudo $(DAEMON) --config $(CONFIG)
+	@echo "Running daemon with config: examples/sample-config.ci.yaml"
+	sudo $(DAEMON) --config examples/sample-config.ci.yaml
 
 run-daemon-offline:
 	$(DAEMON) --config $(CONFIG) --offline $(PCAP)
 
-test: venv build
+test: config-ci venv build
+	@echo "Running tests with config: examples/sample-config.ci.yaml"
 	$(PYTEST) tests/integration/test_api.py
 
 clean:

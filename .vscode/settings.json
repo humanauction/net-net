@@ -92,7 +92,7 @@
     "C_Cpp.default.defines": [
         "CMAKE_SOURCE_DIR=\"${workspaceFolder}\""
     ],
-    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
     "python-envs.pythonProjects": [],
     "makefile.configureOnOpen": true
 }

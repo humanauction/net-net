@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.15)
 project(net-net CXX)
 
+# =========================
+# IMPORTANT: Before running the daemon or tests, generate a config file with the correct interface:
+#   make config-ci
+# This will create examples/sample-config.ci.yaml with the correct interface name.
+# =========================
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -30,8 +36,10 @@ include_directories($ENV{CPPFLAGS})
 link_directories($ENV{LDFLAGS})
 
 # libxcrypt flags
-include_directories(/usr/local/opt/libxcrypt/include)
-link_directories(/usr/local/opt/libxcrypt/lib)
+if(NOT APPLE)
+    include_directories(/usr/local/opt/libxcrypt/include)
+    link_directories(/usr/local/opt/libxcrypt/lib)
+endif()
 
 # Core library
 add_library(netnet-core STATIC

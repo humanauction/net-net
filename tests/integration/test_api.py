@@ -6,7 +6,7 @@ import os
 
 TOKEN = "af9ff608895efc542d80b608a24c13d2"
 BASE = "http://localhost:8082"
-CONFIG_PATH = "examples/sample-config.yaml"
+CONFIG_PATH = "examples/sample-config.ci.yaml"
 DAEMON_PATH = "./build/netnet-daemon"
 
 
