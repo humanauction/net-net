@@ -36,8 +36,8 @@ jobs:
         brew update
         brew install cmake libpcap yaml-cpp nlohmann-json cpp-httplib openssl sqlite3 googletest
     
-    - name: Set libxcrypt environment variables (linux)
-      if: runner.os == 'linux'
+    - name: Set libxcrypt environment variables (Linux)
+      if: runner.os == 'Linux'
       run: |
         echo "CPPFLAGS=-I/usr/local/opt/libxcrypt/include" >> $GITHUB_ENV
         echo "LDFLAGS=-L/usr/local/opt/libxcrypt/lib" >> $GITHUB_ENV
