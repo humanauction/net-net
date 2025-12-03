@@ -21,6 +21,7 @@ CONFIG=examples/sample-config.yaml
 PCAP=tests/fixtures/sample.pcap
 ICMP=tests/fixtures/icmp_sample.pcap
 
+
 all: build test
 
 activate:
@@ -35,9 +36,11 @@ build:
 	cmake --build build
 
 NETNET_IFACE ?= lo0
+NETNET_USER ?= nobody
+NETNET_GROUP ?= nobody
 
 config-ci:
-	env NETNET_IFACE=$(NETNET_IFACE) envsubst < examples/sample-config.yaml > examples/sample-config.ci.yaml
+	env NETNET_IFACE=$(NETNET_IFACE) NETNET_USER=$(NETNET_USER) NETNET_GROUP=$(NETNET_GROUP) envsubst < examples/sample-config.yaml > examples/sample-config.ci.yaml
 
 run-daemon-online:
 	@echo "Running daemon with config: examples/sample-config.ci.yaml"
