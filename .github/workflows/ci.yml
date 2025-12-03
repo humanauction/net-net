@@ -74,12 +74,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest requests pyyaml bcrypt
 
-    - name: Set interface env variable
+    - name: Set interface and privilege env variable
       run: |
-        if ["${{ runner.os }}" = "macOS"]; then
+        if [ "${{ runner.os }}" = "macOS" ]; then
           echo "NETNET_IFACE=lo0" >> $GITHUB_ENV
+          echo "NETNET_USER=nobody" >> $GITHUB_ENV
+          echo "NETNET_GROUP=nobody" >> $GITHUB_ENV
         else
           echo "NETNET_IFACE=lo" >> $GITHUB_ENV
+          echo "NETNET_USER=nobody" >> $GITHUB_ENV
+          echo "NETNET_GROUP=nogroup" >> $GITHUB_ENV
         fi
 
     - name: Patch config for interface

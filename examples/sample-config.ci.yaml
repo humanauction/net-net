@@ -100,8 +100,8 @@ logging:
 # Security
 privilege:
     drop: true
-    user: "nobody"
-    group: "nobody"
+    user: ""
+    group: ""
 
 # User Credentials (DEVELOPMENT ONLY - passwords are plaintext)
 # In production, store bcrypt-hashed passwords and load from secure secrets manager
