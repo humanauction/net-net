@@ -32,12 +32,11 @@ if(NOT HTTPLIB_INCLUDE_DIR)
 endif()
 
 # Environment flags
-include_directories($ENV{CPPFLAGS})
-link_directories($ENV{LDFLAGS})
-
 # libxcrypt flags
 if(UNIX AND NOT APPLE)
     set(EXTRA_LIBS crypt uuid)
+    # include_directories(/usr/local/opt/libxcrypt/include)
+    # link_directories(/usr/local/opt/libxcrypt/lib)
 else()
     set(EXTRA_LIBS "")
 endif()
