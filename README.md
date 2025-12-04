@@ -1,5 +1,7 @@
 # net-net
 
+[![CI/CD Pipeline](https://github.com/humanauction/net-net/actions/workflows/ci.yml/badge.svg)](https://github.com/humanauction/net-net/actions/workflows/ci.yml)
+
 Real-Time Network Monitor with Web Dashboard
 
 ## Overview
