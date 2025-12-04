@@ -190,6 +190,7 @@ target_link_libraries(test_session_manager
         OpenSSL::SSL
         OpenSSL::Crypto
         ${EXTRA_LIBS}
+        crypt
 )
 
 # TEST Aggregator Integration

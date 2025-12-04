@@ -41,7 +41,10 @@ jobs:
       run: |
         echo "CPPFLAGS=-I/usr/local/opt/libxcrypt/include" >> $GITHUB_ENV
         echo "LDFLAGS=-L/usr/local/opt/libxcrypt/lib" >> $GITHUB_ENV
-
+    
+    - name: Install libcrypt
+      run: sudo apt-get update && sudo apt-get install -y libxcrypt-dev
+      
     - name: Configure CMake
       run: |
         mkdir -p build
