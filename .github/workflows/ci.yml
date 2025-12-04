@@ -34,17 +34,14 @@ jobs:
       if: runner.os == 'macOS'
       run: |
         brew update
-        brew install cmake libpcap yaml-cpp nlohmann-json cpp-httplib openssl sqlite3 googletest
+        brew install cmake libpcap yaml-cpp nlohmann-json cpp-httplib openssl sqlite3 googletest libxcrypt
     
     - name: Set libxcrypt environment variables (Linux)
       if: runner.os == 'Linux'
       run: |
         echo "CPPFLAGS=-I/usr/local/opt/libxcrypt/include" >> $GITHUB_ENV
         echo "LDFLAGS=-L/usr/local/opt/libxcrypt/lib" >> $GITHUB_ENV
-    
-    - name: Install libcrypt
-      run: sudo apt-get update && sudo apt-get install -y libxcrypt-dev
-      
+
     - name: Configure CMake
       run: |
         mkdir -p build

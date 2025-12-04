@@ -35,8 +35,8 @@ endif()
 # libxcrypt flags
 if(UNIX AND NOT APPLE)
     set(EXTRA_LIBS crypt uuid)
-    # include_directories(/usr/local/opt/libxcrypt/include)
-    # link_directories(/usr/local/opt/libxcrypt/lib)
+    include_directories(/usr/local/opt/libxcrypt/include)
+    link_directories(/usr/local/opt/libxcrypt/lib)
 else()
     set(EXTRA_LIBS "")
 endif()
@@ -190,7 +190,6 @@ target_link_libraries(test_session_manager
         OpenSSL::SSL
         OpenSSL::Crypto
         ${EXTRA_LIBS}
-        crypt
 )
 
 # TEST Aggregator Integration
