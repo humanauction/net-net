@@ -538,7 +538,7 @@ curl -X POST http://localhost:8082/login \
 
 ### 🔄 Stage 6: Hardening, CI, Docs (In Progress)
 
-- [ ] CI/CD pipeline (GitHub Actions)
+- [✅] CI/CD pipeline (GitHub Actions)
 - [ ] Code coverage reporting (gcov/lcov)
 - [ ] Sanitizer builds (ASan/UBSan/TSan)
 - [ ] Docker support with health checks
