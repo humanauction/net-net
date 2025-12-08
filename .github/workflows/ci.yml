@@ -254,7 +254,6 @@ jobs:
         sudo pkill netnet-daemon || true
 
     - name: Upload coverage to codecov
-      if: ${{ !cancelled() }}
       uses: codecov/codecov-action@v5
       with:
         files: ./build/coverage.info  # ./coverage-python.xml
