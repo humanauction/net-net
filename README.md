@@ -2,6 +2,8 @@
 
 [![CI/CD Pipeline](https://github.com/humanauction/net-net/actions/workflows/ci.yml/badge.svg)](https://github.com/humanauction/net-net/actions/workflows/ci.yml)
 
+[![codecov](https://codecov.io/gh/humanauction/net-net/graph/badge.svg)](https://codecov.io/gh/humanauction/net-net)
+
 Real-Time Network Monitor with Web Dashboard
 
 ## Overview
