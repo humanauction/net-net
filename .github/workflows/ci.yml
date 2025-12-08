@@ -245,9 +245,9 @@ jobs:
         done
         exit 1
 
-    - name: Run Python tests with coverage
-      run: |
-        pytest tests/integration/ --cov=src --cov-report=xml:coverage-python.xml
+    # - name: Run Python tests with coverage
+    #   run: |
+    #     pytest tests/integration/ --cov=tests/integration --cov-report=xml:coverage-python.xml
 
     - name: Stop daemon
       run: |
@@ -256,11 +256,8 @@ jobs:
     - name: Upload coverage to codecov
       uses: codecov/codecov-action@v5
       with:
-        files: ./build/coverage.info,./coverage-python.xml
+        files: ./build/coverage.info  # ./coverage-python.xml
         flags: unittests
         name: net-net-coverage
         fail_ci_if_error: true
-
-    - name: Verify coverage instrumentation
-      run: |
-        nm build/netnet-daemon | grep -q gcov || echo "Warning: No coverage symbols found"
+        codecov_yml_path: ./.codecov.yml

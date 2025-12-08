@@ -117,3 +117,8 @@ tests/integration/__pycache__/
 # Sessions Databases
 *.sessions
 *.sessions-*
+
+# Ignore codecov token file
+codecov
+codecov.SHA256SUM
+codecov.SHA256SUM.sig
