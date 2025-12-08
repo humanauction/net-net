@@ -13,10 +13,11 @@ StatsAggregator::StatsAggregator(std::chrono::seconds window_size, size_t histor
 }
 
 void StatsAggregator::advanceWindow() {
-    if (impl_->count < impl_->history_depth) impl_->count++;
     impl_->stats_history[impl_->head] = impl_->current;
     impl_->head = (impl_->head + 1) % impl_->history_depth;
-    impl_->current = AggregatedStats{};
+    impl_->count++;
+
+    impl_->current = AggregatedStats();
     impl_->current.window_start = std::chrono::system_clock::now();
 }
 
@@ -31,7 +32,11 @@ std::vector<AggregatedStats> StatsAggregator::history() const {
 }
 
 const AggregatedStats& StatsAggregator::currentStats() const {
-    return impl_->current;
+    if (impl_->count == 0) {
+        return impl_->current;
+    }
+    size_t last_window = (impl_->head + impl_->history_depth - 1) % impl_->history_depth;
+    return impl_->stats_history[last_window];
 }
 
 void StatsAggregator::ingest(const ParsedPacket& packet) {

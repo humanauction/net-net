@@ -270,7 +270,9 @@ target_link_libraries(test_metrics_endpoint
 add_test(NAME test_metrics_endpoint COMMAND test_metrics_endpoint)
 
 # Copy test fixtures to build directory
-file(COPY ${CMAKE_SOURCE_DIR}/tests/fixtures
-    DESTINATION ${CMAKE_BINARY_DIR}/tests)
+if(EXISTS ${CMAKE_SOURCE_DIR}/tests/fixtures)
+    file(COPY ${CMAKE_SOURCE_DIR}/tests/fixtures
+        DESTINATION ${CMAKE_BINARY_DIR}/tests)
+endif()
 
 
