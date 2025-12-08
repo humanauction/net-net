@@ -24,8 +24,11 @@ void StatsAggregator::advanceWindow() {
 // Circular Buffer: get ordered history
 std::vector<AggregatedStats> StatsAggregator::history() const {
     std::vector<AggregatedStats> ordered;
-    for (size_t i = 0; i < impl_->count; ++i) {
-        size_t idx = (impl_->head + i) % impl_->history_depth;
+
+    size_t num_windows = (impl_->count == 0) ? 0 : std::min(impl_->count, impl_->history_depth);
+    
+    for (size_t i = 0; i < num_windows; ++i) {
+        size_t idx = (impl_->head + impl_->history_depth - num_windows + i) % impl_->history_depth;
         ordered.push_back(impl_->stats_history[idx]);
     }
     return ordered;
