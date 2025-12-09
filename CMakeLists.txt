@@ -105,7 +105,7 @@ find_package(GTest REQUIRED)
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/CMake/config.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/config.h
+    ${CMAKE_CURRENT_BINARY_DIR}/include/config.h
 )
 
 # Test runner

@@ -145,16 +145,39 @@ std::string PcapAdapter::source() const noexcept {
 }
 
 bool isValidBpfFilter(const std::string& filter) {
-        // Allow only alphanumerics, spaces, and basic BPF symbols
-        static const std::regex safe_bpf(R"(^[a-zA-Z0-9 _\(\)\.\,\=\>\<\!\-]*$)");
-        if (filter.length() > 128) return false; // length limit variable
-        if (!std::regex_match(filter, safe_bpf)) return false;
-        // Check for forbidden keywords
-        static const std::vector<std::string> forbidden = {
-            " or ", " and ", ";", "|", "&", "`", "$(", ")", "{", "}", "[", "]"
-        };
-        for (const auto& bad : forbidden) {
-            if (filter.find(bad) != std::string::npos) return false;
+    // Check length
+    if (filter.length() > 256) {
+        return false;
+    }
+    // Allow BPF syntax: keywords, IPs, ports, operators, grouping
+    // Valid: tcp, udp, icmp, host, port, src, dst, and, or, not, net
+    // Valid symbols: () [] / : . - (parentheses, brackets, CIDR, colons, dots, dashes)
+    // Allow only alphanumerics, spaces, and basic BPF symbols
+    static const std::regex safe_bpf(R"(^[a-zA-Z0-9 _\(\)\[\]\/:\.\,\=\>\<\!\-]*$)");
+
+    if (!std::regex_match(filter, safe_bpf)) {
+        return false;
+    }
+    // // Block ONLY dangerous shell metacharacters and command injection patterns
+    static const std::vector<std::string> forbidden = {
+        ";",      // Command separator
+        "|",      // Pipe
+        "&",      // Background/AND operator
+        "`",      // Command substitution
+        "$(",     // Command substitution
+        "$()",    // Command substitution
+        "${",     // Variable expansion
+        ">>",     // Redirect append
+        "<<",     // Here document
+        "\n",     // Newline
+        "\r",     // Carriage return
+        "\\",     // Escape (could bypass other checks)
+    };
+
+    for (const auto& bad : forbidden) {
+        if (filter.find(bad) != std::string::npos) {
+            return false;
         }
-        return true;
+    }
+    return true;
 }
