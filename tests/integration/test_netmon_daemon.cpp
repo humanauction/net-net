@@ -57,8 +57,8 @@ protected:
         }
 
         std::remove(test_config_path.c_str());
-        std::remove(test_daemon.db);
-        std::remove(test_daemon.db.sessions);
+        std::remove("test_daemon.db");
+        std::remove("test_daemon.db.sessions");
     }
     // Helper: Create test configuration file
     void createTestConfig() {
@@ -87,9 +87,9 @@ protected:
         
         // User credentials (use bcrypt hash for test password)
         YAML::Node user;
-        user["username"] = test_username;
+        user["username"] = "test_username";
         user["password"] = "10000$abcd1234$5678efgh";  // Placeholder hash
-        user["plaintext"] = test_password;  // For testing
+        user["plaintext"] = "test_password";  // For testing
         config["users"].push_back(user);
         
         // Logging config
@@ -115,12 +115,41 @@ protected:
         return client.Get(path, headers);
     }
 
-    // TODO: Make authenticated POST request with API token
+    // Make authenticated POST request with API token
+    httplib::Result makeAuthenticatedPost(const std::string& path, const std::string& body = "") {
+        httplib::Client client(test_host, test_port);
+        httplib::Headers headers = {
+            {"Authorization", "Bearer " + api_token}
+        };
+        return client.Post(path, headers, body, "application/json");
+    }
 
-    // TODO: Make request with session token
+    // Make request with session token
+    httplib::Result makeSessionToken(const std::string& path, const std::string& token) {
+        httplib::Client client(test_host, test_port);
+        httplib::Headers headers = {
+            {"X-Session-Token", token}
+        };
+        return client.Get(path, headers);
+    }
+    
+    // Login and get session token
+    std::string loginUser(const std::string& username, const std::string& password) {
+        httplib::Client client(test_host, test_port);
 
-    // TODO: Login and get session token
+        json body;
 
+        body["username"] = username;
+        body["password"] = password;
+
+        auto res = client.Post("/login", body.dump(), "application/json");
+        if (!res || res->status != 200) {
+            return "";
+        }
+        
+        auto j = json::parse(res->body);
+        return j.value("token", "");
+    }
 };
 
 // =================================
