@@ -6,6 +6,8 @@
 #include "daemon/NetMonDaemon.h"
 #include "httplib.h"
 #include <nlohmann/json.hpp>
+#include <filesystem>
+
 
 using json = nlohmann::json;
 
@@ -24,20 +26,22 @@ protected:
     std::string session_token;    
 
     void SetUp() override {
-        // Create test daemon with config
-        createTestConfig();
-
-        daemon = std::make_unique<NetMonDaemon>(test_config_path);
-        // Start background thread daemon
+        // Create YAML config in memory (no file I/O!)
+        YAML::Node config = createTestConfigNode();  // ✅ CAPTURE THE RETURN VALUE
+    
+        // Create daemon with in-memory config
+        daemon = std::make_unique<NetMonDaemon>(config, "test-daemon-config");  // ✅ PASS YAML::Node
+    
+        // Start daemon in background thread
         daemon_thread = std::thread([this]() {
             daemon->run();
         });
-
-        // Await daemon
+    
+        // Wait for daemon to be ready
         bool ready = false;
         for (int i = 0; i < 50; ++i) {
             httplib::Client client(test_host, test_port);
-            client.set_connection_timeout(1,0);
+            client.set_connection_timeout(1, 0);
             auto res = client.Post("/login");
             if (res && (res->status == 400 || res->status == 401)) {
                 ready = true;
@@ -45,8 +49,8 @@ protected:
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-
-        ASSERT_TRUE(ready) << "ERROR Daemon failed to start.";
+    
+        ASSERT_TRUE(ready) << "ERROR: Daemon failed to start within 5 seconds";
     }
 
     void TearDown() override {
@@ -64,22 +68,27 @@ protected:
         std::remove("test_daemon.db.sessions");
     }
     // Helper: Create test configuration file
-    void createTestConfig() {
+    YAML::Node createTestConfigNode() {
         YAML::Node config;
-
-        // Interface config
+        
+        // Interface config (offline mode for tests)
         config["interface"]["name"] = "lo0";
         config["interface"]["promiscuous"] = false;
         config["interface"]["snaplen"] = 65535;
         config["interface"]["timeout_ms"] = 1000;
+        
+        // Use offline mode with the test pcap file
+        config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+        
+        // No BPF filter
         config["filter"]["bpf"] = "";
         
         // Stats config
         config["stats"]["window_size"] = 1;
         config["stats"]["history_depth"] = 3;
         
-        // Database config
-        config["database"]["path"] = "test_daemon.db";
+        // Database config (in-memory SQLite)
+        config["database"]["path"] = ":memory:";
         
         // API config
         config["api"]["enabled"] = true;
@@ -88,11 +97,10 @@ protected:
         config["api"]["token"] = api_token;
         config["api"]["session_expiry"] = 3600;
         
-        // User credentials (use bcrypt hash for test password)
+        // User credentials (PLAINTEXT - your code will hash them)
         YAML::Node user;
-        user["username"] = "test_username";
-        user["password"] = "10000$abcd1234$5678efgh";  // Placeholder hash
-        user["plaintext"] = "test_password";  // For testing
+        user["username"] = test_username;
+        user["password"] = test_password;  // Plaintext - gets auto-hashed on line 158
         config["users"].push_back(user);
         
         // Logging config
@@ -103,10 +111,7 @@ protected:
         // Privilege config (don't drop for tests)
         config["privilege"]["drop"] = false;
         
-        // Write to file
-        std::ofstream fout(test_config_path);
-        fout << config;
-        fout.close();
+        return config;
     }
 
     // Make authenticated GET request with API token

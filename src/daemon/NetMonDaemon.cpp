@@ -148,6 +148,13 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
     log("info", "NetMonDaemon initialized with config: " + config_path_);
 }
 
+NetMonDaemon::NetMonDaemon(const YAML::Node& config, const std::string& config_name)
+    : config_path_(config_name), running_(false)
+{
+    log("info", "Loading configuration from memory: " + config_name);
+    initializeFromConfig(config);
+}
+
 void NetMonDaemon::run()
 {
     running_ = true;
