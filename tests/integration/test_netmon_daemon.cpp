@@ -256,4 +256,163 @@ TEST_F(NetMonDaemonTest, LoginWithMalformedJSONReturns400) {
     EXPECT_EQ(j["error"], "malformed JSON");
 }
 
-// TEST Access With Session Token
+// TEST Session Token Authorizes Metrics Access
+TEST_F(NetMonDaemonTest, SessionTokenAuthorizesMetricsAccess) {
+    // Login to get session token
+    std::string token = loginUser(test_username, test_password);
+    ASSERT_FALSE(token.empty()) << "Failed to get session token";
+    
+    // Use session token to access /metrics
+    auto res = makeSessionGet("/metrics", token);
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("total_bytes"));
+}
+
+// TEST Logout Invalidates Session
+TEST_F(NetMonDaemonTest, LogoutInvalidatesSession) {
+    // Login
+    std::string token = loginUser(test_username, test_password);
+    ASSERT_FALSE(token.empty());
+    
+    // Verify token works
+    auto res1 = makeSessionGet("/metrics", token);
+    EXPECT_EQ(res1->status, 200);
+    
+    // Logout
+    httplib::Client client(test_host, test_port);
+    httplib::Headers headers = {
+        {"X-Session-Token", token}
+    };
+    auto res2 = client.Post("/logout", headers, "", "application/json");
+    EXPECT_EQ(res2->status, 200);
+    
+    // Verify token no longer works
+    auto res3 = makeSessionGet("/metrics", token);
+    EXPECT_EQ(res3->status, 401);
+}
+
+// TEST Control Endpoints
+TEST_F(NetMonDaemonTest, ControlStartEndpoint) {
+    auto res = makeAuthenticatedPost("/control/start");
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["status"], "started");
+}
+
+// TEST Control Stop Endpoint
+TEST_F(NetMonDaemonTest, ControlStopEndpoint) {
+    auto res = makeAuthenticatedPost("/control/stop");
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["status"], "stopped");
+    
+    // Verify daemon actually stopped
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_FALSE(daemon->isRunning());
+}
+
+// TEST Control Reload Endpoint
+TEST_F(NetMonDaemonTest, ControlReloadEndpoint) {
+    auto res = makeAuthenticatedPost("/control/reload");
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["status"], "reloaded");
+}
+
+// TEST Control Endpoints Require Auth
+TEST_F(NetMonDaemonTest, ControlEndpointsRequireAuth) {
+    httplib::Client client(test_host, test_port);
+    
+    auto res1 = client.Post("/control/start");
+    EXPECT_EQ(res1->status, 401);
+    
+    auto res2 = client.Post("/control/stop");
+    EXPECT_EQ(res2->status, 401);
+    
+    auto res3 = client.Post("/control/reload");
+    EXPECT_EQ(res3->status, 401);
+}
+
+// TEST Rate Limiting on Control Endpoints
+TEST_F(NetMonDaemonTest, RateLimitingOnControlEndpoints) {
+    // First request succeeds
+    auto res1 = makeAuthenticatedPost("/control/start");
+    EXPECT_EQ(res1->status, 200);
+    
+    // Second immediate request is rate-limited
+    auto res2 = makeAuthenticatedPost("/control/start");
+    EXPECT_EQ(res2->status, 429);
+    
+    auto j = json::parse(res2->body);
+    EXPECT_EQ(j["error"], "rate limit exceeded");
+}
+
+// TEST Invalid Endpoint Returns 404
+TEST_F(NetMonDaemonTest, InvalidEndpointReturns404) {
+    auto res = makeAuthenticatedGet("/api/nonexistent");
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 404);
+}
+
+// TEST Token Auth Via Query Parameter
+TEST_F(NetMonDaemonTest, TokenAuthViaQueryParameter) {
+    httplib::Client client(test_host, test_port);
+    auto res = client.Get("/metrics?token=" + api_token);
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+}
+
+// TEST Protocol Breakdown In Metrics
+TEST_F(NetMonDaemonTest, ProtocolBreakdownInMetrics) {
+    // Generate some traffic (if possible in test environment)
+    auto res = makeAuthenticatedGet("/metrics");
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    auto& breakdown = j["protocol_breakdown"];
+    
+    // Should have at least the structure (may be empty)
+    EXPECT_TRUE(breakdown.is_object());
+}
+
+//  TEST Active Flows Array Structure
+TEST_F(NetMonDaemonTest, ActiveFlowsArrayStructure) {
+    auto res = makeAuthenticatedGet("/metrics");
+    
+    ASSERT_TRUE(res != nullptr);
+    auto j = json::parse(res->body);
+    auto& flows = j["active_flows"];
+    
+    EXPECT_TRUE(flows.is_array());
+    
+    // If flows exist, validate structure
+    if (!flows.empty()) {
+        auto& flow = flows[0];
+        EXPECT_TRUE(flow.contains("iface"));
+        EXPECT_TRUE(flow.contains("src_ip"));
+        EXPECT_TRUE(flow.contains("src_port"));
+        EXPECT_TRUE(flow.contains("dst_ip"));
+        EXPECT_TRUE(flow.contains("dst_port"));
+        EXPECT_TRUE(flow.contains("protocol"));
+        EXPECT_TRUE(flow.contains("bytes"));
+        EXPECT_TRUE(flow.contains("packets"));
+        EXPECT_TRUE(flow.contains("state"));
+    }
+}
