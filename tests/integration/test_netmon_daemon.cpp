@@ -155,3 +155,105 @@ protected:
 // =================================
 // Test suite
 // =================================
+
+// TEST Daemon is Running
+
+TEST_F(NetMonDaemonTest, DaemonStartsSuccessfully) {
+    EXPECT_TRUE(daemon ->isRunning());
+}
+
+
+// TEST Metrics Endpoint Returns Valid JSON
+TEST_F(NetMonDaemonTest, MetricsEndpointReturnsValidJSON) {
+    auto res = makeAuthenticatedGet("/metrics");
+    
+    ASSERT_TRUE(res != nullptr) << "Request failed";
+    EXPECT_EQ(res->status, 200);
+    EXPECT_EQ(res->get_header_value("Content-Type"), "application/json");
+    
+    // Parse JSON
+    auto j = json::parse(res->body);
+    
+    // Validate structure
+    EXPECT_TRUE(j.contains("timestamp"));
+    EXPECT_TRUE(j.contains("window_start"));
+    EXPECT_TRUE(j.contains("total_bytes"));
+    EXPECT_TRUE(j.contains("total_packets"));
+    EXPECT_TRUE(j.contains("bytes_per_second"));
+    EXPECT_TRUE(j.contains("protocol_breakdown"));
+    EXPECT_TRUE(j.contains("active_flows"));
+    
+    // Validate types
+    EXPECT_TRUE(j["timestamp"].is_number());
+    EXPECT_TRUE(j["total_bytes"].is_number());
+    EXPECT_TRUE(j["total_packets"].is_number());
+    EXPECT_TRUE(j["protocol_breakdown"].is_object());
+    EXPECT_TRUE(j["active_flows"].is_array());
+}
+
+
+// TEST Metrics Endpoint Without Auth Returns 401
+TEST_F(NetMonDaemonTest, MetricsWithoutAuthReturns401) {
+    httplib::Client client(test_host, test_port);
+    auto res = client.Get("/metrics");
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 401);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("error"));
+    EXPECT_EQ(j["error"], "unauthorized");
+}
+
+// TEST Login With Valid Credentials Returns Token
+TEST_F(NetMonDaemonTest, LoginWithValidCredentialsReturnsToken) {
+    httplib::Client client(test_host, test_port);
+    
+    json body;
+    body["username"] = test_username;
+    body["password"] = test_password;
+    
+    auto res = client.Post("/login", body.dump(), "application/json");
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("token"));
+    EXPECT_TRUE(j.contains("username"));
+    EXPECT_TRUE(j.contains("expires_in"));
+    EXPECT_EQ(j["username"], test_username);
+    EXPECT_GT(j["token"].get<std::string>().length(), 0);
+}
+
+// TEST Login With Invalid Credentials Returns 401
+TEST_F(NetMonDaemonTest, LoginWithInvalidCredentialsReturns401) {
+    httplib::Client client(test_host, test_port);
+    
+    json body;
+    body["username"] = "nonexistent";
+    body["password"] = "wrongpass";
+    
+    auto res = client.Post("/login", body.dump(), "application/json");
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 401);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("error"));
+}
+
+// TEST Login With Malformed JSON Returns 400
+TEST_F(NetMonDaemonTest, LoginWithMalformedJSONReturns400) {
+    httplib::Client client(test_host, test_port);
+    
+    auto res = client.Post("/login", "not valid json", "application/json");
+    
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 400);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["error"], "malformed JSON");
+}
+
+// TEST Access With Session Token
