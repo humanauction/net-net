@@ -40,7 +40,8 @@ TEST(PcapAdapterTest, OfflineMode) {
     
     adapter.stopCapture();
 
-    EXPECT_GT(packet_count.load(), 0) << "No packets were captured from the pcap file.";
+    EXPECT_EQ(packet_count.load(), 10) << "Expected 10 ICMP packets in sample pcap, got " << packet_count.load();
+    EXPECT_GT(packet_count.load(), 0) << "No packets captured from pcap file";
 }
 
 TEST(PcapAdapterTest, InvalidInterface) {
