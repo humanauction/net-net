@@ -19,6 +19,9 @@ protected:
     std::string test_host = "localhost";
     std::string api_token = "test-token-12345";
     std::string test_config_path = "test_daemon_config.yaml";
+    std::string test_username = "test_username";
+    std::string test_password = "test_password";
+    std::string session_token;    
 
     void SetUp() override {
         // Create test daemon with config
@@ -125,7 +128,7 @@ protected:
     }
 
     // Make request with session token
-    httplib::Result makeSessionToken(const std::string& path, const std::string& token) {
+    httplib::Result makeSessionGet(const std::string& path, const std::string& token) {
         httplib::Client client(test_host, test_port);
         httplib::Headers headers = {
             {"X-Session-Token", token}

@@ -269,6 +269,36 @@ target_link_libraries(test_metrics_endpoint
 )
 add_test(NAME test_metrics_endpoint COMMAND test_metrics_endpoint)
 
+# TEST: NetMon Daemon Integration
+add_executable(test_netmon_daemon
+    tests/integration/test_netmon_daemon.cpp
+    src/daemon/NetMonDaemon.cpp
+)
+
+target_include_directories(test_netmon_daemon
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
+        ${SQLITE3_INCLUDE_DIRS}
+)
+
+target_link_libraries(test_netmon_daemon
+    PRIVATE
+        netnet-core
+        GTest::gtest
+        GTest::gtest_main
+        yaml-cpp
+        nlohmann_json::nlohmann_json
+        pthread
+        ${SQLITE3_LIBRARIES}
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        ${EXTRA_LIBS}
+)
+
+add_test(NAME test_netmon_daemon COMMAND test_netmon_daemon)
+
 # Copy test fixtures to build directory
 if(EXISTS ${CMAKE_SOURCE_DIR}/tests/fixtures)
     file(COPY ${CMAKE_SOURCE_DIR}/tests/fixtures
