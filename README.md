@@ -80,9 +80,9 @@ open http://localhost:8082
 ┌─────────────────────────────────────────────────────┐
 │                  Web Dashboard                      │
 │         (HTML/CSS/JavaScript + D3.js)               │
-└───────────────────────┬─────────────────────────────┘
-                        │ REST API (HTTP)
-┌──────────────────▼──────────────────────────────────┐
+└──────────────────────┬──────────────────────────────┘
+                       │ REST API (HTTP)
+┌──────────────────────▼──────────────────────────────┐
 │                NetMonDaemon (C++)                   │
 │   ┌─────────────────────────────────────────────┐   │
 │   │  SessionManager (bcrypt + SQLite)           │   │
@@ -104,13 +104,13 @@ open http://localhost:8082
 │   ┌─────────────────────────────────────────────┐   │
 │   │  PcapAdapter (libpcap wrapper)              │   │
 │   └─────────────────────────────────────────────┘   │
-└───────────────────────┬─────────────────────────────┘
-                        │
-                ┌───────▼─────────┐
-                │    Network      │
-                │    Interface    │
-                │   (en0, eth0)   │
-                └─────────────────┘
+└─────────────────────┬───────────────────────────────┘
+                      │
+              ┌───────▼─────────┐
+              │     Network     │
+              │     Interface   │
+              │   (en0, eth0)   │
+              └─────────────────┘
 ```
 
 See [docs/design.md](docs/design.md) for detailed architecture documentation.
@@ -121,42 +121,42 @@ See [docs/design.md](docs/design.md) for detailed architecture documentation.
 
 ```text
 net-net/
-├── src/                          # C++ source code
-│   ├── Main.cpp                  # Entry point
-│   ├── core/                     # Core monitoring logic
-│   │   ├── Parser.{cpp,h}        # Packet parsing (Ethernet→IP→TCP/UDP)
-│   │   ├── ConnectionTracker.{cpp,h}  # Flow tracking
-│   │   ├── StatsAggregator.{cpp,h}    # Metrics aggregation
-│   │   ├── StatsPersistence.{cpp,h}   # SQLite storage
-│   │   ├── SessionManager.{cpp,h}     # Authentication
-│   │   └── PacketMeta.h          # Packet metadata structures
-│   ├── net/                      # Network adapters
-│   │   └── PcapAdapter.{cpp,h}   # libpcap wrapper
-│   └── daemon/                   # Daemon implementation
-│       ├── NetMonDaemon.{cpp,h}  # Main daemon class
+├── src/                                # C++ source code
+│   ├── Main.cpp                        # Entry point
+│   ├── core/                           # Core monitoring logic
+│   │   ├── Parser.{cpp,h}              # Packet parsing (Ethernet→IP→TCP/UDP)
+│   │   ├── ConnectionTracker.{cpp,h}   # Flow tracking
+│   │   ├── StatsAggregator.{cpp,h}     # Metrics aggregation
+│   │   ├── StatsPersistence.{cpp,h}    # SQLite storage
+│   │   ├── SessionManager.{cpp,h}      # Authentication
+│   │   └── PacketMeta.h                # Packet metadata structures
+│   ├── net/                            # Network adapters
+│   │   └── PcapAdapter.{cpp,h}         # libpcap wrapper
+│   └── daemon/                         # Daemon implementation
+│       ├── NetMonDaemon.{cpp,h}        # Main daemon class
 │       └── (ConfigLoader merged into NetMonDaemon)
-├── www/                          # Web dashboard
-│   ├── index.html                # Dashboard UI
-│   ├── style.css                 # Styling
-│   └── app.js                    # JavaScript (D3.js + Chart.js)
-├── include/net-net/vendor/       # Third-party code
-│   ├── bcrypt.{cpp,h}            # Password hashing
-│   └── uuid_gen.{cpp,h}          # Session token generation
-├── tests/                        # Test suites
-│   ├── unit/                     # C++ unit tests (GoogleTest)
-│   ├── integration/              # Integration tests (C++ + Python)
-│   └── fixtures/                 # Test PCAP files
-├── docs/                         # Documentation
-│   ├── design.md                 # Architecture overview
-│   ├── api.md                    # REST API reference
+├── www/                                # Web dashboard
+│   ├── index.html                      # Dashboard UI
+│   ├── style.css                       # Styling
+│   └── app.js                          # JavaScript (D3.js + Chart.js)
+├── include/net-net/vendor/             # Third-party code
+│   ├── bcrypt.{cpp,h}                  # Password hashing
+│   └── uuid_gen.{cpp,h}                # Session token generation
+├── tests/                              # Test suites
+│   ├── unit/                           # C++ unit tests (GoogleTest)
+│   ├── integration/                    # Integration tests (C++ + Python)
+│   └── fixtures/                       # Test PCAP files
+├── docs/                               # Documentation
+│   ├── design.md                       # Architecture overview
+│   ├── api.md                          # REST API reference
 │   ├── EntityRelationshipDataModel.md  # Database schema
-│   ├── packetFlowDiagram.md      # Packet processing flow
+│   ├── packetFlowDiagram.md            # Packet processing flow
 │   └── securityChecklistReview.md      # Security audit
-├── examples/
-│   └── sample-config.yaml        # Example configuration
-├── CMakeLists.txt                # Build configuration
-├── Makefile                      # Build wrapper
-└── README.md                     # This file
+├── examples/                           # Example configuration(s)
+│   └── sample-config.yaml              
+├── CMakeLists.txt                      # Build configuration
+├── Makefile                            # Build wrapper
+└── README.md                           # This file
 ```
 
 ---
