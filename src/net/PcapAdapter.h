@@ -8,7 +8,6 @@
 #include "../core/PacketMeta.h"
 
 using PacketCallback = std::function<void(const PacketMeta&, const uint8_t*, size_t)>;
-bool isValidBpfFilter(const std::string& filter);
 class PcapAdapter {
 public:
     struct Options{
@@ -50,6 +49,7 @@ public:
     void setFilter(const std::string& bpf);
     // Source name can be interface or file
     std::string source() const noexcept;
+    static bool isValidBpfFilter(const std::string& filter);
 
 private:
     struct Impl;

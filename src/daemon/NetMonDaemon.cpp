@@ -9,6 +9,7 @@
 #include <sstream>
 #include <csignal>
 #include "net/PcapAdapter.h"
+#include "core/Parser.h"
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
@@ -16,6 +17,7 @@
 #include <nlohmann/json.hpp>
 #include "core/SessionManager.h"
 #include "../../include/net-net/vendor/bcrypt.h"
+
 
 // ===================================================================
 // CONSTRUCTORS
@@ -104,7 +106,7 @@ void NetMonDaemon::initializeFromConfig(const YAML::Node& config) {
         log("info", "Running in live mode on interface: " + iface_or_file);
         
         // BPF filter validation
-        if (!bpf_filter.empty() && !isValidBpfFilter(bpf_filter)) {
+        if (!bpf_filter.empty() && !PcapAdapter::isValidBpfFilter(bpf_filter)) {
             throw std::runtime_error("Invalid BPF filter: contains forbidden characters or is too long");
         }
     } else {
@@ -530,8 +532,8 @@ void NetMonDaemon::log(const std::string& level, const std::string& msg) const {
         }
         oss << "[" << level << "] " << msg << std::endl;
         if (log_stream_.is_open()) {
-            (log_stream_) << oss.str();
-            (log_stream_).flush();
+            log_stream_ << oss.str();
+            log_stream_.flush();
         } else {
             std::cout << oss.str();
         }

@@ -144,7 +144,7 @@ std::string PcapAdapter::source() const noexcept {
     return impl_->source_name;
 }
 
-bool isValidBpfFilter(const std::string& filter) {
+bool PcapAdapter::isValidBpfFilter(const std::string& filter) {
     // Check length
     if (filter.length() > 256) {
         return false;

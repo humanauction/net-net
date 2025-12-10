@@ -32,15 +32,14 @@ public:
     static void signalHandler(int signum);
 private:
     void initializeFromConfig(const YAML::Node& config);
-
     void log(const std::string& level, const std::string& msg) const;
     void setupApiRoutes();
-
-    std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_control_request_;
-    const std::chrono::seconds control_rate_limit_{2};
     bool isAuthorized(const httplib::Request& req);
     void logAuthFailure(const httplib::Request& req) const;
     bool shouldLog(const std::string& level) const;
+    
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_control_request_;
+    const std::chrono::seconds control_rate_limit_{2};
     mutable std::shared_mutex reload_mutex;
     mutable std::ofstream log_stream_;
     std::atomic<bool> running_{false};
