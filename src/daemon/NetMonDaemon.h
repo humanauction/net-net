@@ -33,14 +33,14 @@ public:
 private:
     void initializeFromConfig(const YAML::Node& config);
 
-    void log(const std::string& level, const std::string& msg);
+    void log(const std::string& level, const std::string& msg) const;
     void setupApiRoutes();
 
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_control_request_;
     const std::chrono::seconds control_rate_limit_{2};
     bool isAuthorized(const httplib::Request& req);
     void logAuthFailure(const httplib::Request& req) const;
-    bool shouldLog(const std::string& level);
+    bool shouldLog(const std::string& level) const;
     mutable std::shared_mutex reload_mutex;
     mutable std::ofstream log_stream_;
     std::atomic<bool> running_{false};
@@ -58,7 +58,6 @@ private:
     std::string log_file_;   
     std::string log_level_;
     bool log_timestamps_ = true;
-    std::ofstream log_stream_;
     std::unique_ptr<SessionManager> session_manager_;
     int session_expiry_ = 3600;
 };

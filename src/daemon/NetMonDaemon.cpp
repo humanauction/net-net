@@ -530,8 +530,8 @@ void NetMonDaemon::log(const std::string& level, const std::string& msg) const {
         }
         oss << "[" << level << "] " << msg << std::endl;
         if (log_stream_.is_open()) {
-            const_cast<std::ofstream&>(log_stream_) << oss.str();
-            const_cast<std::ofstream&>(log_stream_).flush();
+            (log_stream_) << oss.str();
+            (log_stream_).flush();
         } else {
             std::cout << oss.str();
         }
