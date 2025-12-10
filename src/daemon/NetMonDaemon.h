@@ -42,6 +42,7 @@ private:
     void logAuthFailure(const httplib::Request& req) const;
     bool shouldLog(const std::string& level);
     mutable std::shared_mutex reload_mutex;
+    mutable std::ofstream log_stream_;
     std::atomic<bool> running_{false};
     static std::atomic<bool> running_signal_;
     std::string config_path_;
