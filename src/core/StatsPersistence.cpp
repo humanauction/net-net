@@ -3,52 +3,70 @@
 #include <iostream>
 
 StatsPersistence::StatsPersistence(const std::string& db_path)
-    : db_path_(db_path) {
-    // TODO: Open DB, create table if not exists
-    sqlite3* db;
-    if (sqlite3_open(db_path_.c_str(), &db) != SQLITE_OK) {
-        std::cerr << "Failed to open database: " << sqlite3_errmsg(db) << std::endl;
-        return;
+    : db_path_(db_path), db_(nullptr) {
+
+    if (sqlite3_open(db_path_.c_str(), &db_) != SQLITE_OK) {
+        std::string error = db_ ? sqlite3_errmsg(db_) : "error unknown";
+        if (db_) sqlite3_close(db_);
+        throw std::runtime_error("Failed to open database: " + error);
     }
-    const char* create_table_sql =
-        "CREATE TABLE IF NOT EXISTS agg_stats ("
-        "window_start INTEGER,"
-        "iface TEXT,"
-        "protocol INTEGER,"
-        "src_ip TEXT,"
-        "src_port INTEGER,"
-        "dst_ip TEXT,"
-        "dst_port INTEGER,"
-        "pkts_c2s INTEGER,"
-        "pkts_s2c INTEGER,"
-        "bytes_c2s INTEGER,"
-        "bytes_s2c INTEGER"
-        ");";
-        sqlite3_exec(db, create_table_sql, nullptr, nullptr, nullptr);
-        sqlite3_close(db);
+
+    createSchema();
 }
 
-void StatsPersistence::saveWindow(const AggregatedStats& stats) {
-    sqlite3* db;
-    if (sqlite3_open(db_path_.c_str(), &db) != SQLITE_OK) {
-        std::cerr << "Failed to open database: " << sqlite3_errmsg(db) << std::endl;
-        return;
+StatsPersistence::~StatsPersistence() {
+    if(db_) {
+        sqlite3_close(db_);
     }
-    sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+}
+
+void StatsPersistence::createSchema() {
+    const char* schema =R"(
+        CREATE TABLE IF NOT EXISTS agg_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            window_start INTEGER NOT NULL,
+            iface TEXT NOT NULL,
+            protocol INTEGER NOT NULL,
+            src_ip TEXT NOT NULL,
+            src_port INTEGER NOT NULL,
+            dst_ip TEXT NOT NULL,
+            dst_port INTEGER NOT NULL,
+            pkts_c2s INTEGER DEFAULT 0,
+            pkts_s2c INTEGER DEFAULT 0,
+            bytes_c2s INTEGER DEFAULT 0,
+            bytes_s2c INTEGER DEFAULT 0
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_window_start ON agg_stats(window_start);
+    )";
+    
+    char* err_msg = nullptr;
+    if (sqlite3_exec(db_, schema, nullptr, nullptr, &err_msg) != SQLITE_OK) {
+        std::string error = err_msg ? err_msg : "unknown error";
+        sqlite3_free(err_msg);
+        throw std::runtime_error("Failed to create schema: " + error);
+    }
+}
+    
+
+void StatsPersistence::saveWindow(const AggregatedStats& stats) {
+    
+    sqlite3_exec(db_, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
     const char* insert_sql =
         "INSERT INTO agg_stats(window_start, iface, protocol, src_ip, src_port, dst_ip, dst_port, pkts_c2s, pkts_s2c, bytes_c2s, bytes_s2c) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+
     sqlite3_stmt* stmt;
-    if (sqlite3_prepare_v2(db, insert_sql, -1, &stmt, nullptr) != SQLITE_OK) {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-        sqlite3_close(db);
+    if (sqlite3_prepare_v2(db_, insert_sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db_) << std::endl;
         return;
     }
 
     for (const auto& kv : stats.flows) {
         const FlowKey& key = kv.first;
         const FlowStats& fs = kv.second;
+
         sqlite3_bind_int64(stmt, 1, std::chrono::duration_cast<std::chrono::seconds>(stats.window_start.time_since_epoch()).count());
         sqlite3_bind_text(stmt, 2, key.iface.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 3, key.protocol);
@@ -62,29 +80,24 @@ void StatsPersistence::saveWindow(const AggregatedStats& stats) {
         sqlite3_bind_int(stmt, 11, fs.bytes_s2c);
 
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            std::cerr << "Failed to execute statement: " << sqlite3_errmsg(db) << std::endl;
+            std::cerr << "Failed to execute statement: " << sqlite3_errmsg(db_) << std::endl;
         }
         sqlite3_reset(stmt);
     }
     sqlite3_finalize(stmt);
-    sqlite3_exec(db, "END TRANSACTION;", nullptr, nullptr, nullptr);
-    sqlite3_close(db);
+    sqlite3_exec(db_, "END TRANSACTION;", nullptr, nullptr, nullptr);
 }
 
 std::vector<AggregatedStats> StatsPersistence::loadHistory(size_t max_windows) {
     std::vector<AggregatedStats> history;
-    sqlite3* db;
-    if (sqlite3_open(db_path_.c_str(), &db) != SQLITE_OK) {
-        std::cerr << "Failed to open database: " << sqlite3_errmsg(db) << std::endl;
-        return history;
-    }
+
     const char* select_sql =
         "SELECT window_start, iface, protocol, src_ip, src_port, dst_ip, dst_port, pkts_c2s, pkts_s2c, bytes_c2s, bytes_s2c "
         "FROM agg_stats ORDER BY window_start DESC LIMIT ?;";
     sqlite3_stmt* stmt;
-    if (sqlite3_prepare_v2(db, select_sql, -1, &stmt, nullptr) != SQLITE_OK) {
-        std::cerr << "Failed to prepare select statement: " << sqlite3_errmsg(db) << std::endl;
-        sqlite3_close(db);
+
+    if (sqlite3_prepare_v2(db_, select_sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare select statement: " << sqlite3_errmsg(db_) << std::endl;
         return history;
     }
     sqlite3_bind_int(stmt, 1, static_cast<int>(max_windows));
@@ -123,10 +136,9 @@ std::vector<AggregatedStats> StatsPersistence::loadHistory(size_t max_windows) {
         agg.flows[key] = fs;
     }
     if (rc != SQLITE_DONE) {
-        std::cerr << "Error while reading rows: " << sqlite3_errmsg(db) << std::endl;
+        std::cerr << "Error while reading rows: " << sqlite3_errmsg(db_) << std::endl;
     }
     sqlite3_finalize(stmt);
-    sqlite3_close(db);
 
     for (auto& kv : windows) {
         history.push_back(std::move(kv.second));

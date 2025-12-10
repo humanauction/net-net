@@ -247,26 +247,6 @@ target_link_libraries(netnet-daemon
         ${EXTRA_LIBS}
 )
 
-target_include_directories(netnet-daemon
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
-        ${SQLITE3_INCLUDE_DIRS}
-)
-
-target_link_libraries(netnet-daemon
-    PRIVATE
-        netnet-core
-        yaml-cpp
-        pthread
-        nlohmann_json::nlohmann_json
-        ${SQLITE3_LIBRARIES}
-        OpenSSL::SSL
-        OpenSSL::Crypto
-        ${EXTRA_LIBS}
-)
-
 # Unit test: Metrics endpoint
 add_executable(test_metrics_endpoint 
     tests/unit/test_metrics_endpoint.cpp
