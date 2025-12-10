@@ -70,21 +70,21 @@ TEST(PcapAdapterTest, InvalidOptions) {
 }
 
 TEST(PcapAdapterTest, BpfFilterValid) {
-    EXPECT_TRUE(isValidBpfFilter("icmp"));
-    EXPECT_TRUE(isValidBpfFilter("tcp port 82"));
-    EXPECT_TRUE(isValidBpfFilter("host 192.168.1.1"));
-    EXPECT_TRUE(isValidBpfFilter("udp and port 53"));
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("icmp"));
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("tcp port 82"));
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("host 192.168.1.1"));
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("udp and port 53"));
 }
 
 TEST(PcapAdapterTest, BpfFilterInvalidCharacters) {
-    EXPECT_FALSE(isValidBpfFilter("icmp; rm -rf /"));
-    EXPECT_FALSE(isValidBpfFilter("tcp | nc 1.2.3.4 4444"));
-    EXPECT_FALSE(isValidBpfFilter("udp && evil"));
-    EXPECT_FALSE(isValidBpfFilter("host 192.168.1.1$"));
-    EXPECT_FALSE(isValidBpfFilter("`shutdown`"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("icmp; rm -rf /"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp | nc 1.2.3.4 4444"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("udp && evil"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("host 192.168.1.1$"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("`shutdown`"));
 }
 
 TEST(PcapAdapterTest, BpfFilterTooLong) {
     std::string long_filter(257, 'a');
-    EXPECT_FALSE(isValidBpfFilter(long_filter));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter(long_filter));
 }
