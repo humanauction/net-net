@@ -54,7 +54,6 @@ protected:
     }
 
     void TearDown() override {
-
         if (daemon) {
             daemon->stop();
         }

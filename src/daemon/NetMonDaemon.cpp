@@ -188,12 +188,18 @@ NetMonDaemon::~NetMonDaemon() {
 // ===================================================================
 
 void NetMonDaemon::run() {
+    running_.store(true);
     log("info", "NetMonDaemon is running...");
     
     // Start packet capture
     std::thread capture_thread([this]() {
         try {
-            adapter_->start();
+            pcap_->startCapture([this](const PacketMeta& meta, const uint8_t* data, size_t len) {
+                ParsedPacket pkt;
+                if (parsePacket(data, len, meta, pkt)) {
+                    aggregator_->ingest(pkt);
+                }
+            });
         } catch (const std::exception& ex) {
             log("error", "Capture failed: " + std::string(ex.what()));
         }
@@ -202,20 +208,23 @@ void NetMonDaemon::run() {
     // Start API server
     startServer();
     
-    // Wait for capture to complete
+    
+
+    // Live mode: keep server running until stop() is called
+    log("info", "API server ready...");
+    while (running_.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // Cleanup
+    log("info", "Daemon shutting down...");
+        // Wait for capture to complete
     if (capture_thread.joinable()) {
         capture_thread.join();
     }
-    
-    // ✅ CHANGE THIS SECTION:
-    if (opts_.offline && opts_.exit_after_offline) {
-        log("info", "Capture complete! Exiting immediately (test mode).");
-        stopServer();
-        return;
-    }
-    
-    log("info", "Capture complete! API server will remain running for 100 seconds.");
-    std::this_thread::sleep_for(std::chrono::seconds(100));
+
+    stopServer();
+    running_.store(false);
 }
 
 // ===================================================================
@@ -461,7 +470,17 @@ void NetMonDaemon::startServer() {
     });
 
     // Await server response
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    auto start = std::chrono::steady_clock::now();
+    while (!svr_.is_running()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        
+        // Timeout after 5 seconds
+        if (std::chrono::steady_clock::now() - start > std::chrono::seconds(5)) {
+            throw std::runtime_error("API server failed to start within 5 seconds");
+        }
+    }
+    
+    log("info", "API server is now listening");
 }
 
 void NetMonDaemon::stopServer() {
@@ -476,14 +495,17 @@ void NetMonDaemon::stopServer() {
 // HELPER METHODS
 // ===================================================================
 
-void NetMonDaemon::stop()
-{
-    running_ = false;
+void NetMonDaemon::stop() {
+    if (!running_.load()) return;
+    
     log("info", "NetMonDaemon is stopping...");
-    svr_.stop();
-    if (api_thread_.joinable()) {
-        api_thread_.join();
+    running_.store(false);
+    
+    // stop capture
+    if (pcap_) {
+        pcap_->stopCapture();
     }
+
 }
 
 bool NetMonDaemon::isAuthorized(const httplib::Request& req) {
