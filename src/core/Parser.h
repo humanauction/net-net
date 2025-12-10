@@ -1,5 +1,6 @@
 #pragma once
 #include "core/PacketMeta.h"
+#include "StatsAggregator.h"
 
 // Layer 2 (data link) info
 struct DataLinkInfo {

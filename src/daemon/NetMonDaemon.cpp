@@ -467,13 +467,17 @@ void NetMonDaemon::setupApiRoutes() {
         }
         try {
             std::lock_guard<std::shared_mutex> lock(reload_mutex);
-            YAML::Node config = YAML::LoadFile(config_path_);
-            
-            // Re-initialize from reloaded config
-            initializeFromConfig(config);
-            
-            log("info", "Config reloaded successfully");
+
+            if (config_path_.find(".yaml") != std::string::npos) {
+                YAML::Node config = YAML::LoadFile(config_path_);
+                initializeFromConfig(config);
+                log("info", "SUCCESS, config reloaded from: " + config_path_);
+                
+            } else {
+                log("warn", "RELOAD SKIPPED - Daemon using in-memory config: " + config_path_);
+            }
             res.set_content("{\"status\":\"reloaded\"}", "application/json");
+
         } catch (const std::exception& ex) {
             log("error", "Reload failed: " + std::string(ex.what()));
             res.status = 500;
@@ -558,28 +562,4 @@ std::atomic<bool> NetMonDaemon::running_signal_{true};
 void NetMonDaemon::signalHandler(int signum) {
     std::cout << "\n[INFO] Signal (" << signum << ") received. Shutting down..." << std::endl;
     running_signal_ = false;
-}
-
-// ===================================================================
-// MAIN ENTRY POINT
-// ===================================================================
-
-int main(int argc, char* argv[]) {
-    std::string config_path;
-    for (int i = 1; i < argc - 1; ++i) {
-        if (std::string(argv[i]) == "--config") {
-            config_path = argv[i + 1];
-            break;
-        }
-    }
-    if (config_path.empty()) {
-        std::cerr << "Usage: " << argv[0] << " --config <config_path.yaml>" << std::endl;
-        return 1;
-    }
-
-    std::signal(SIGINT, NetMonDaemon::signalHandler);
-    NetMonDaemon daemon(config_path);
-    daemon.setRunning(true);
-    daemon.run();
-    return 0;
 }
