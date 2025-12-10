@@ -58,5 +58,14 @@ private:
     friend void pcap_bridge(unsigned char*, const struct pcap_pkthdr*, const unsigned char*);
 };
 
+struct PcapOptions {
+    std::string interface_name = "en0";
+    bool promiscuous = false;
+    std::string filter;
+    bool offline = false;
+    std::string offline_file;
+    bool exit_after_offline = false;
+};
+
 
 

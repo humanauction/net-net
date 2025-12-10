@@ -121,6 +121,9 @@ void NetMonDaemon::initializeFromConfig(const YAML::Node& config) {
     opts.snaplen       = snaplen;
     opts.timeout_ms    = timeout;
     opts.read_offline  = read_offline;
+
+    opts_ = opts;
+    
     pcap_ = std::make_unique<PcapAdapter>(opts);
 
     // 4. StatsAggregator
@@ -184,73 +187,35 @@ NetMonDaemon::~NetMonDaemon() {
 // RUN METHOD
 // ===================================================================
 
-void NetMonDaemon::run()
-{
-    running_ = true;
+void NetMonDaemon::run() {
     log("info", "NetMonDaemon is running...");
-
-    // Start packet capture BEFORE dropping privileges
-    pcap_->startCapture([this](const PacketMeta& meta, const uint8_t* data, size_t len) {
-        ParsedPacket pkt;
-        if (parsePacket(data, len, meta, pkt)) {
-            aggregator_->ingest(pkt);
+    
+    // Start packet capture
+    std::thread capture_thread([this]() {
+        try {
+            adapter_->start();
+        } catch (const std::exception& ex) {
+            log("error", "Capture failed: " + std::string(ex.what()));
         }
     });
-
-    // Drop privileges AFTER capture device is open (only for file-based config)
-    if (config_path_.find(".yaml") != std::string::npos) {
-        YAML::Node config = YAML::LoadFile(config_path_);
-        if (config["privilege"] && config["privilege"]["drop"] && config["privilege"]["drop"].as<bool>()) {
-            std::string user = config["privilege"]["user"] ? config["privilege"]["user"].as<std::string>() : "nobody";
-            std::string group = config["privilege"]["group"] ? config["privilege"]["group"].as<std::string>() : "nobody";
-            struct passwd* pw = getpwnam(user.c_str());
-            struct group* gr = getgrnam(group.c_str());
-            if (!pw || !gr) {
-                log("error", "Invalid user/group for privilege drop");
-                exit(1);
-            }
-            if (setgid(gr->gr_gid) != 0 || setuid(pw->pw_uid) != 0) {
-                log("error", "Failed to drop privileges");
-                exit(1);
-            }
-            log("info", "Dropped privileges to " + user + ":" + group);
-        }
-    }
-
-    setupApiRoutes();
-
-    // Serve static dashboard files
-    svr_.set_mount_point("/", "./www");
-
-    // Start API server in separate thread
-    api_thread_ = std::thread([this]() {
-        log("info", "Starting API server on " + api_host_ + ":" + std::to_string(api_port_));
-        svr_.listen(api_host_, api_port_);
-    });
-
-    // Main loop - advance stats window and persist
-    int cleanup_counter = 0;
-    while (NetMonDaemon::running_signal_ && isRunning()) {
-        aggregator_->advanceWindow();
-        auto stats = aggregator_->currentStats();
-        persistence_->saveWindow(stats);
-
-        // Cleanup expired sessions every 60 seconds
-        if (++cleanup_counter % 60 == 0) {
-            session_manager_->cleanupExpired();
-            log("debug", "Expired sessions cleaned");
-        }
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
-
-    pcap_->stopCapture();
-    log("info", "Capture complete! API server will remain running for 100 seconds.");
-    for (int i = 0; i < 100 && NetMonDaemon::running_signal_; ++i) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    
+    // Start API server
+    startServer();
+    
+    // Wait for capture to complete
+    if (capture_thread.joinable()) {
+        capture_thread.join();
     }
     
-    stop();
+    // ✅ CHANGE THIS SECTION:
+    if (opts_.offline && opts_.exit_after_offline) {
+        log("info", "Capture complete! Exiting immediately (test mode).");
+        stopServer();
+        return;
+    }
+    
+    log("info", "Capture complete! API server will remain running for 100 seconds.");
+    std::this_thread::sleep_for(std::chrono::seconds(100));
 }
 
 // ===================================================================
@@ -484,6 +449,27 @@ void NetMonDaemon::setupApiRoutes() {
             res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
         }
     });
+}
+
+void NetMonDaemon::startServer() {
+    log("info", "Starting API server on " + api_host_ + ":" + std::to_string(api_port_));
+
+    setupApiRoutes();
+
+    api_thread_ = std::thread([this]() {
+        svr_.listen(api_host_, api_port_);
+    });
+
+    // Await server response
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+}
+
+void NetMonDaemon::stopServer() {
+    log("info", "Stopping API server...");
+    svr_.stop();
+    if (api_thread_.joinable()) {
+        api_thread_.join();
+    }
 }
 
 // ===================================================================

@@ -3,6 +3,8 @@
 #include <vector>
 #include "core/StatsAggregator.h"
 
+
+struct sqlite3; // Forward declaration
 class StatsPersistence {
 public:
     explicit StatsPersistence(const std::string& db_path);
@@ -15,5 +17,4 @@ private:
     std::string db_path_;
     sqlite3* db_;
     void createSchema();
-    // TODO Database connection goes here
 };

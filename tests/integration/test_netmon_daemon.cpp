@@ -79,6 +79,7 @@ protected:
         
         // Use offline mode with the test pcap file
         config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+        config["offline"]["exit_after_read"] = true;
         
         // No BPF filter
         config["filter"]["bpf"] = "";

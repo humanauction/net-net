@@ -34,6 +34,8 @@ private:
     void initializeFromConfig(const YAML::Node& config);
     void log(const std::string& level, const std::string& msg) const;
     void setupApiRoutes();
+    void startServer();
+    void stopServer();
     bool isAuthorized(const httplib::Request& req);
     void logAuthFailure(const httplib::Request& req) const;
     bool shouldLog(const std::string& level) const;
@@ -51,6 +53,7 @@ private:
     std::uint16_t api_port_;
     std::map<std::string, std::string> user_credentials_;
     std::unique_ptr<PcapAdapter> pcap_;
+    PcapAdapter::Options opts_;
     std::unique_ptr<StatsAggregator> aggregator_;
     std::unique_ptr<StatsPersistence> persistence_;
     httplib::Server svr_;
