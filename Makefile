@@ -79,9 +79,11 @@ test: config-ci venv build
 	@echo ""
 	@echo "==> Generating coverage report..."
 	cd $(BUILD_DIR) && \
-		lcov --capture --directory . --output-file coverage.info && \
-		lcov --remove coverage.info '/usr/*' '*/tests/*' '*/vendor/*' '*/googletest/*' \
-			--output-file coverage_filtered.info && \
+		lcov --capture --directory . --output-file coverage.info \
+			--ignore-errors inconsistent,unsupported,format && \
+		lcov --remove coverage.info '/usr/*' '*/tests/*' '*/vendor/*' '*/googletest/*' '*/include/net-net/vendor/*' \
+			--output-file coverage_filtered.info \
+			--ignore-errors inconsistent,unsupported,format,unused && \
 		(lcov --list coverage_filtered.info | grep -E "NetMonDaemon|StatsPersistence|PcapAdapter" || true)
 	@echo ""
 	@echo "==> Coverage summary:"
@@ -97,7 +99,9 @@ test-python: config-ci venv
 
 coverage: test
 	@echo "==> Generating HTML coverage report..."
-	cd $(BUILD_DIR) && genhtml coverage_filtered.info --output-directory coverage_html
+	cd $(BUILD_DIR) && genhtml coverage_filtered.info \
+		--output-directory coverage_html \
+		--ignore-errors inconsistent,unsupported,format
 	@echo "Coverage report: $(BUILD_DIR)/coverage_html/index.html"
 	$(OPEN_CMD) $(BUILD_DIR)/coverage_html/index.html 2>/dev/null || true
 
