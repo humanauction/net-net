@@ -55,20 +55,13 @@ venv:
 	@test -d $(VENV) || python3 -m venv $(VENV)
 	$(PIP) install -r requirements.txt || true
 
-
-coverage: clean-coverage test
-	@echo "📊 Generating coverage report..."
-	@cd $(BUILD_DIR) && gcovr --root .. \
-	  --exclude '.*tests/.*' \
-	  --exclude '.*vendor/.*' \
-	  --exclude '.*googletest/.*' \
-	  --print-summary
-
 build:
 	@echo "==> Building project with coverage instrumentation..."
 	cmake -S . -B $(BUILD_DIR) \
 		-G "Unix Makefiles" \
-		-DCMAKE_BUILD_TYPE=Debug
+		-DCMAKE_BUILD_TYPE=Debug \
+		-DCMAKE_CXX_FLAGS="--coverage -g -O0" \
+		-DCMAKE_EXE_LINKER_FLAGS="--coverage"
 	cmake --build $(BUILD_DIR)
 
 rebuild: clean build
@@ -77,6 +70,34 @@ config-ci:
 	@echo "==> Generating CI config..."
 	env NETNET_IFACE=$(NETNET_IFACE) NETNET_USER=$(NETNET_USER) NETNET_GROUP=$(NETNET_GROUP) \
 		envsubst < examples/sample-config.yaml > $(CONFIG_CI)
+
+# Check if gcovr is available
+GCOVR := $(shell command -v gcovr 2> /dev/null || echo "python3 -m gcovr")
+
+remove-vendor-coverage:
+	@echo "🧹 Removing vendor coverage files..."
+	@find $(BUILD_DIR) -path "*/vendor/*.gcda" -delete 2>/dev/null || true
+	@find $(BUILD_DIR) -path "*/include/net-net/vendor/*.gcda" -delete 2>/dev/null || true
+
+coverage: clean-coverage test remove-vendor-coverage
+	@echo "📊 Generating coverage report..."
+	@cd $(BUILD_DIR) && $(GCOVR) --root .. \
+		--exclude '.*tests/.*' \
+		--exclude '.*vendor/.*' \
+		--exclude '.*googletest/.*' \
+		--gcov-ignore-errors=no_working_dir_found \
+		--print-summary
+
+coverage-html: clean-coverage test remove-vendor-coverage
+	@echo "📊 Generating HTML coverage report..."
+	@cd $(BUILD_DIR) && $(GCOVR) --root .. \
+		--exclude '.*tests/.*' \
+		--exclude '.*vendor/.*' \
+		--exclude '.*googletest/.*' \
+		--gcov-ignore-errors=no_working_dir_found \
+		--html-details coverage.html
+	@echo "✅ Coverage report: $(BUILD_DIR)/coverage.html"
+	$(OPEN_CMD) $(BUILD_DIR)/coverage.html 2>/dev/null || true
 
 run-daemon-online: config-ci
 	@echo "==> Running daemon with config: $(CONFIG_CI)"
@@ -92,18 +113,6 @@ test: config-ci venv build
 	@echo ""
 	@echo "==> Running Python API integration tests..."
 	$(PYTEST) tests/integration/test_api.py -v
-	@echo ""
-	@echo "==> Generating coverage report..."
-	cd $(BUILD_DIR) && \
-		lcov --capture --directory . --output-file coverage.info \
-			--ignore-errors inconsistent,unsupported,format && \
-		lcov --remove coverage.info '/usr/*' '*/tests/*' '*/vendor/*' '*/googletest/*' '*/include/net-net/vendor/*' \
-			--output-file coverage_filtered.info \
-			--ignore-errors inconsistent,unsupported,format,unused && \
-		(lcov --list coverage_filtered.info | grep -E "NetMonDaemon|StatsPersistence|PcapAdapter" || true)
-	@echo ""
-	@echo "==> Coverage summary:"
-	@cd $(BUILD_DIR) && lcov --summary coverage_filtered.info
 
 test-cpp: build
 	@echo "==> Running C++ tests only..."
