@@ -478,6 +478,24 @@ curl -X POST http://localhost:8082/login \
 # If login fails, check password hash in config
 ```
 
+### One-liner to clean and rebuild coverage
+
+```bash
+cd build && \
+find . -name "*.gc*" -delete && \
+rm -rf * && \
+cmake .. -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_FLAGS="--coverage -g -O0" \
+  -DCMAKE_EXE_LINKER_FLAGS="--coverage" && \
+make -j$(sysctl -n hw.ncpu) && \
+./test_parser_extended && \
+./test_pcap_adapter_extended && \
+gcovr --root .. \
+  --exclude '.*tests/.*' \
+  --exclude '.*vendor/.*' \
+  --print-summary
+```
+
 ---
 
 ## 📚 Documentation

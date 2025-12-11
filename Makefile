@@ -39,6 +39,13 @@ NETNET_IFACE ?= lo0
 NETNET_USER ?= nobody
 NETNET_GROUP ?= nobody
 
+.PHONY: clean-coverage
+clean-coverage:
+	@echo "🧹 Cleaning coverage data..."
+	@find $(BUILD_DIR) -name "*.gcda" -delete 2>/dev/null || true
+	@find $(BUILD_DIR) -name "*.gcno" -delete 2>/dev/null || true
+	@echo "✅ Coverage data cleaned"
+
 all: build
 
 activate:
@@ -47,6 +54,15 @@ activate:
 venv:
 	@test -d $(VENV) || python3 -m venv $(VENV)
 	$(PIP) install -r requirements.txt || true
+
+
+coverage: clean-coverage test
+	@echo "📊 Generating coverage report..."
+	@cd $(BUILD_DIR) && gcovr --root .. \
+	  --exclude '.*tests/.*' \
+	  --exclude '.*vendor/.*' \
+	  --exclude '.*googletest/.*' \
+	  --print-summary
 
 build:
 	@echo "==> Building project with coverage instrumentation..."
@@ -97,18 +113,10 @@ test-python: config-ci venv
 	@echo "==> Running Python tests only..."
 	$(PYTEST) tests/integration/test_api.py -v
 
-coverage: test
-	@echo "==> Generating HTML coverage report..."
-	cd $(BUILD_DIR) && genhtml coverage_filtered.info \
-		--output-directory coverage_html \
-		--ignore-errors inconsistent,unsupported,format
-	@echo "Coverage report: $(BUILD_DIR)/coverage_html/index.html"
-	$(OPEN_CMD) $(BUILD_DIR)/coverage_html/index.html 2>/dev/null || true
-
 clean:
 	@echo "==> Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
 	rm -f $(CONFIG_CI)
 
 .PHONY: all activate venv build rebuild run-daemon-online run-daemon-offline \
-		test test-cpp test-python coverage config-ci clean
+		test test-cpp test-python coverage coverage-html config-ci clean clean-coverage

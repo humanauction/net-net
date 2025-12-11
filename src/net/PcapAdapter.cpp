@@ -146,26 +146,26 @@ std::string PcapAdapter::source() const noexcept {
 
 bool PcapAdapter::isValidBpfFilter(const std::string& filter) {
     // Check length
-    if (filter.length() > 256) {
+    if (filter.empty() || filter.length() > 256) {
         return false;
     }
-    // Allow BPF syntax: keywords, IPs, ports, operators, grouping
+    
+    // Step 1: Allow BPF syntax using regex
     // Valid: tcp, udp, icmp, host, port, src, dst, and, or, not, net
-    // Valid symbols: () [] / : . - (parentheses, brackets, CIDR, colons, dots, dashes)
-    // Allow only alphanumerics, spaces, and basic BPF symbols
-    static const std::regex safe_bpf(R"(^[a-zA-Z0-9 _\(\)\[\]\/:\.\,\=\>\<\!\-]*$)");
-
+    // Valid symbols: () [] / : . , = > < ! - & (bitwise AND for BPF)
+    // Allow spaces and underscores
+    static const std::regex safe_bpf(R"(^[a-zA-Z0-9 _\(\)\[\]\/:\.\,\=\>\<\!\-\&]*$)");
+    
     if (!std::regex_match(filter, safe_bpf)) {
         return false;
     }
-    // // Block ONLY dangerous shell metacharacters and command injection patterns
+    
+    // Step 2: Block ONLY dangerous shell metacharacters
     static const std::vector<std::string> forbidden = {
         ";",      // Command separator
         "|",      // Pipe
-        "&",      // Background/AND operator
         "`",      // Command substitution
         "$(",     // Command substitution
-        "$()",    // Command substitution
         "${",     // Variable expansion
         ">>",     // Redirect append
         "<<",     // Here document
@@ -173,11 +173,27 @@ bool PcapAdapter::isValidBpfFilter(const std::string& filter) {
         "\r",     // Carriage return
         "\\",     // Escape (could bypass other checks)
     };
-
+    
     for (const auto& bad : forbidden) {
         if (filter.find(bad) != std::string::npos) {
             return false;
         }
     }
+    
+    // Step 3: Reject SQL injection attempts
+    std::string lower = filter;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    
+    static const std::vector<std::string> sql_keywords = {
+        "drop", "delete", "insert", "update", "union", "exec", "script"
+    };
+    
+    for (const auto& keyword : sql_keywords) {
+        if (lower.find(keyword) != std::string::npos) {
+            return false;
+        }
+    }
+    
+    // All checks passed
     return true;
 }

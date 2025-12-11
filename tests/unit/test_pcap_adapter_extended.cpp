@@ -39,14 +39,15 @@ TEST(PcapAdapterExtendedTest, InvalidBPFFilter) {
 TEST(PcapAdapterExtendedTest, BPFFilterWithSQLInjection) {
     EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp; DROP TABLE users;"));
     EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp | rm -rf /"));
-    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp && evil"));
+    // Note: "&&" is valid BPF logical AND, not shell command chaining
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("tcp and udp"));  // Valid BPF
 }
 
 // TEST BPF filter with shell metacharacters
 TEST(PcapAdapterExtendedTest, BPFFilterWithShellMetacharacters) {
     EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp`shutdown`"));
     EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp$(reboot)"));
-    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp&& || cat /etc/passwd"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp; cat /etc/passwd"));
 }
 
 // TEST excessively long BPF filter
@@ -61,7 +62,6 @@ TEST(PcapAdapterExtendedTest, ValidBPFFilters) {
     EXPECT_TRUE(PcapAdapter::isValidBpfFilter("tcp port 80"));
     EXPECT_TRUE(PcapAdapter::isValidBpfFilter("host 192.168.1.1"));
     EXPECT_TRUE(PcapAdapter::isValidBpfFilter("net 10.0.0.0/8"));
-    // EXPECT_TRUE(PcapAdapter::isValidBpfFilter("tcp[13] & 2 != 0"));
 }
 
 // TEST stop capture before start
@@ -132,4 +132,73 @@ TEST(PcapAdapterExtendedTest, EmptyInterfaceName) {
     opts.iface_or_file = "";
     
     EXPECT_THROW(PcapAdapter adapter(opts), std::invalid_argument);
+}
+
+// TEST valid advanced BPF filters
+TEST(PcapAdapterExtendedTest, ValidAdvancedBPFFilters) {
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("tcp[13] & 2 != 0"));  // SYN flag
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("ip[0] & 0xf0"));     // IP version
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("udp[8:2] = 53"));    // DNS port
+}
+
+// TEST dangerous shell injection patterns are blocked
+TEST(PcapAdapterExtendedTest, BlockDangerousShellPatterns) {
+    // Command separators
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp; reboot"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp\nreboot"));
+    
+    // Command substitution
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp`whoami`"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp$(whoami)"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp${PATH}"));
+    
+    // Pipes and redirects
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp | cat /etc/passwd"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp >> /tmp/pwned"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp << EOF"));
+    
+    // Escapes
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp\\nmalicious"));
+}
+
+// TEST SQL keywords in various positions
+TEST(PcapAdapterExtendedTest, BlockSQLKeywords) {
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("DROP TABLE users"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("tcp drop table"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("DELETE FROM sessions"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("INSERT INTO logs"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("UPDATE users SET"));
+    EXPECT_FALSE(PcapAdapter::isValidBpfFilter("UNION SELECT password"));
+}
+
+// TEST legitimate BPF operators that might look suspicious
+TEST(PcapAdapterExtendedTest, AllowLegitimateOperators) {
+    // BPF logical operators (not shell operators)
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("tcp and udp"));
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("tcp or icmp"));
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("not tcp"));
+    
+    // Bitwise AND in BPF (different from shell &&)
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("tcp[13] & 2"));
+    
+    // Comparison operators
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("port > 1024"));
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("len < 100"));
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("vlan = 10"));
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("ip[2:2] != 0"));
+}
+
+// TEST edge cases with special characters
+TEST(PcapAdapterExtendedTest, EdgeCasesWithSpecialChars) {
+    // IPv6 addresses with colons
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("host 2001:db8::1"));
+    
+    // CIDR notation
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("net 192.168.0.0/16"));
+    
+    // Port ranges
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("portrange 1000-2000"));
+    
+    // Complex expressions with parentheses
+    EXPECT_TRUE(PcapAdapter::isValidBpfFilter("(tcp or udp) and port 53"));
 }
