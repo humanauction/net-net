@@ -60,7 +60,11 @@ jobs:
     - name: Run C++ unit tests
       run: |
         cd build
-        for test in test_parser test_pcap_adapter test_connection_tracker test_stats_aggregator test_session_manager test_stats_aggregator_integration test_metrics_endpoint; do
+        for test in test_parser test_pcap_adapter test_connection_tracker \
+                    test_stats_aggregator test_session_manager \
+                    test_stats_aggregator_integration test_metrics_endpoint \
+                    test_stats_persistence test_parser_extended \
+                    test_pcap_adapter_extended; do
           if [ -f ./$test ]; then ./$test || true; fi
         done
 

@@ -4,6 +4,10 @@
 #include <chrono>
 #include <fstream>
 
+// =================================
+// Test suite
+// =================================
+
 TEST(PcapAdapterTest, ConstructorValid) {
     PcapAdapter::Options opts;
     opts.iface_or_file = "lo0";

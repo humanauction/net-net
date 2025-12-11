@@ -316,4 +316,36 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/tests/fixtures)
         DESTINATION ${CMAKE_BINARY_DIR}/tests)
 endif()
 
+# ============================================================
+# INTEGRATION TEST: comprehensive test executables
+# ============================================================
+ 
+add_test(NAME test_stats_persistence COMMAND test_stats_persistence)
 
+add_executable(test_parser_extended 
+    tests/unit/test_parser_extended.cpp
+)
+target_include_directories(test_parser_extended PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(test_parser_extended 
+    PRIVATE 
+        netnet-core
+        GTest::gtest_main
+        pthread
+)
+add_test(NAME test_parser_extended COMMAND test_parser_extended)
+
+add_executable(test_pcap_adapter_extended 
+    tests/unit/test_pcap_adapter_extended.cpp
+)
+target_include_directories(test_pcap_adapter_extended PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(test_pcap_adapter_extended 
+    PRIVATE 
+        netnet-core
+        GTest::gtest_main
+        pthread
+)
+add_test(NAME test_pcap_adapter_extended COMMAND test_pcap_adapter_extended)

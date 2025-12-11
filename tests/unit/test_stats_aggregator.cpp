@@ -29,6 +29,11 @@ static ParsedPacket make_udp_packet(const std::string& iface, const std::string&
     return out;
 }
 
+// =================================
+// Test suite
+// =================================
+
+// TEST Basic ingestion and aggregation
 TEST(StatsAggregatorTest, AggregatesFlowsAndHistory) {
     StatsAggregator agg(std::chrono::seconds(1), 3);
 
@@ -62,6 +67,7 @@ TEST(StatsAggregatorTest, AggregatesFlowsAndHistory) {
     EXPECT_GT(current.flows.size(), 0);
 }
 
+// TEST Circular buffer overwriting old windows
 TEST(StatsAggregatorTest, CircularBufferOrder) {
     StatsAggregator agg(std::chrono::seconds(1), 2);  // depth=2
 
