@@ -197,54 +197,49 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          build-essential cmake libpcap-dev libyaml-cpp-dev nlohmann-json3-dev \
-          libssl-dev libsqlite3-dev libgtest-dev pkg-config uuid-dev lcov
-        cd /tmp
-        git clone https://github.com/yhirose/cpp-httplib.git
-        cd cpp-httplib
-        sudo cp httplib.h /usr/local/include/
+          cmake build-essential libpcap-dev libssl-dev \
+          libsqlite3-dev libyaml-cpp-dev nlohmann-json3-dev \
+          libgtest-dev pkg-config lcov gcovr
 
     - name: Configure CMake with coverage
       run: |
-        mkdir -p build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Debug
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+          -DCMAKE_EXE_LINKER_FLAGS="--coverage"
 
     - name: Build with coverage
-      run: |
-        cd build
-        make -j$(nproc)
+      run: cmake --build build
 
-    - name: Run C++ tests
+    - name: Copy test fixtures
+      run: |
+        mkdir -p build/tests/fixtures
+        cp -r tests/fixtures/* build/tests/fixtures/
+
+    - name: Run C++ tests with coverage
       run: |
         cd build
-        for test in test_parser test_pcap_adapter test_connection_tracker test_stats_aggregator test_session_manager test_stats_aggregator_integration test_metrics_endpoint; do
-          if [ -f ./$test ]; then ./$test || true; fi
-        done
+        ctest --output-on-failure --verbose
+        cd ..
 
     - name: Generate C++ coverage report
       run: |
         cd build
-        lcov --capture --directory . --output-file coverage.info
-        lcov --remove coverage.info \
-          '/usr/*' \
-          '*/tests/*' \
-          '*/vendor/*' \
-          '*/test_*.cpp' \
-          '*/httplib.h' \
-          '*/bcrypt.cpp' \
-          '*/uuid_gen.cpp' \
-          --output-file coverage.info
-        lcov --list coverage.info
+        lcov --capture --directory . --output-file coverage.info \
+          --ignore-errors inconsistent,unsupported,format
+        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/vendor/*' '*/googletest/*' \
+          --output-file coverage_filtered.info \
+          --ignore-errors inconsistent,unsupported,format
+        cd ..
 
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.13'
 
     - name: Install Python dependencies
       run: |
-        pip install pytest pytest-cov requests pyyaml bcrypt
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
     - name: Set interface env for CI
       run: |
@@ -258,31 +253,38 @@ jobs:
 
     - name: Start netnet-daemon
       run: |
-        sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml > /tmp/netnet-daemon.log 2>&1 &
-        sleep 5
+        sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml &
+        echo $! > /tmp/netnet-daemon.pid
+        sleep 3
 
     - name: Wait for daemon
       run: |
-        for i in {1..30}; do
-          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/login || echo 000)
-          if [ "$status" = "200" ] || [ "$status" = "404" ]; then exit 0; fi
-          sleep 2
+        for i in {1..10}; do
+          curl -s http://localhost:8082/ && break || sleep 1
         done
-        exit 1
 
-    # - name: Run Python tests with coverage
-    #   run: |
-    #     pytest tests/integration/ --cov=tests/integration --cov-report=xml:coverage-python.xml
+    - name: Run Python integration tests
+      run: |
+        pytest tests/integration/test_api.py -v
 
     - name: Stop daemon
       run: |
-        sudo pkill netnet-daemon || true
+        sudo kill $(cat /tmp/netnet-daemon.pid) || true
+        sleep 1
 
-    - name: Upload coverage to codecov
+    - name: Upload C++ coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
-        files: ./build/coverage.info  # ./coverage-python.xml
-        flags: unittests
-        name: net-net-coverage
-        fail_ci_if_error: true
-        codecov_yml_path: ./.codecov.yml
+        files: ./build/coverage_filtered.info
+        flags: cpp
+        name: cpp-coverage
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Upload Python coverage to Codecov (if enabled)
+      if: false  # Disabled for now since Python tests don't generate coverage
+      uses: codecov/codecov-action@v5
+      with:
+        files: ./coverage-python.xml
+        flags: python
+        name: python-coverage
+        token: ${{ secrets.CODECOV_TOKEN }}

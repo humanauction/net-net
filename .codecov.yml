@@ -7,3 +7,12 @@ coverage:
     patch:
       default:
         target: 80%
+
+# Excluded from coverage calculations (non-production code)
+ignore:
+  - "tests/**"                    # Test files
+  - "include/net-net/vendor/**"   # Third-party libraries
+  - "build/**"                    # Build artifacts
+  - "examples/**"                 # Sample configs
+  - "docs/**"                     # Documentation
+  - ".venv-netnet/**"             # Python virtual env
