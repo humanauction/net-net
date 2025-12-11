@@ -1,14 +1,18 @@
-# Makefile because dev lives matter
+# Here Makefile Here - because dev lives matter too
 
 # Usage:
-# make						# Build all binaries
-# make activate				# Instructions to activate the virtual environment
-# make venv					# Set up the virtual environment
-# make build				# Build the project
-# make run-daemon-online	# Run the daemon online (live capture)
-# make run-daemon-offline	# Run the daemon offline (pcap replay)
-# make clean				# Clean all build artifacts
-# make test					# Run all tests
+# make                      # Build all binaries
+# make activate             # Instructions to activate the virtual environment
+# make venv                 # Set up the virtual environment
+# make build                # Build the project
+# make rebuild              # Clean and rebuild
+# make run-daemon-online    # Run the daemon online (live capture)
+# make run-daemon-offline   # Run the daemon offline (pcap replay)
+# make test                 # Run ALL tests (C++ + Python) with coverage
+# make test-cpp             # Run C++ tests only
+# make test-python          # Run Python tests only
+# make coverage             # Generate HTML coverage report
+# make clean                # Clean all build artifacts
 
 VENV=.venv-netnet
 PYTHON=$(VENV)/bin/python3
@@ -18,11 +22,24 @@ PYTEST=$(VENV)/bin/pytest
 BUILD_DIR=build
 DAEMON=$(BUILD_DIR)/netnet-daemon
 CONFIG=examples/sample-config.yaml
+CONFIG_CI=examples/sample-config.ci.yaml
 PCAP=tests/fixtures/sample.pcap
 ICMP=tests/fixtures/icmp_sample.pcap
 
+# Platform detection for coverage viewer
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+	OPEN_CMD = open
+else
+	OPEN_CMD = xdg-open
+endif
 
-all: build test
+# Environment variables for CI config
+NETNET_IFACE ?= lo0
+NETNET_USER ?= nobody
+NETNET_GROUP ?= nobody
+
+all: build
 
 activate:
 	@echo "Run: source .venv-netnet/bin/activate"
@@ -32,29 +49,62 @@ venv:
 	$(PIP) install -r requirements.txt || true
 
 build:
-	cmake -S . -B build -G "Unix Makefiles"
-	cmake --build build
+	@echo "==> Building project with coverage instrumentation..."
+	cmake -S . -B $(BUILD_DIR) \
+		-G "Unix Makefiles" \
+		-DCMAKE_BUILD_TYPE=Debug
+	cmake --build $(BUILD_DIR)
 
-NETNET_IFACE ?= lo0
-NETNET_USER ?= nobody
-NETNET_GROUP ?= nobody
+rebuild: clean build
 
 config-ci:
-	env NETNET_IFACE=$(NETNET_IFACE) NETNET_USER=$(NETNET_USER) NETNET_GROUP=$(NETNET_GROUP) envsubst < examples/sample-config.yaml > examples/sample-config.ci.yaml
+	@echo "==> Generating CI config..."
+	env NETNET_IFACE=$(NETNET_IFACE) NETNET_USER=$(NETNET_USER) NETNET_GROUP=$(NETNET_GROUP) \
+		envsubst < examples/sample-config.yaml > $(CONFIG_CI)
 
-run-daemon-online:
-	@echo "Running daemon with config: examples/sample-config.ci.yaml"
-	sudo $(DAEMON) --config examples/sample-config.ci.yaml
+run-daemon-online: config-ci
+	@echo "==> Running daemon with config: $(CONFIG_CI)"
+	sudo $(DAEMON) --config $(CONFIG_CI)
 
 run-daemon-offline:
+	@echo "==> Running daemon in offline mode..."
 	$(DAEMON) --config $(CONFIG) --offline $(PCAP)
 
 test: config-ci venv build
-	@echo "Running tests with config: examples/sample-config.ci.yaml"
-	$(PYTEST) tests/integration/test_api.py
+	@echo "==> Running C++ unit and integration tests..."
+	cd $(BUILD_DIR) && ctest --output-on-failure --verbose
+	@echo ""
+	@echo "==> Running Python API integration tests..."
+	$(PYTEST) tests/integration/test_api.py -v
+	@echo ""
+	@echo "==> Generating coverage report..."
+	cd $(BUILD_DIR) && \
+		lcov --capture --directory . --output-file coverage.info && \
+		lcov --remove coverage.info '/usr/*' '*/tests/*' '*/vendor/*' '*/googletest/*' \
+			--output-file coverage_filtered.info && \
+		(lcov --list coverage_filtered.info | grep -E "NetMonDaemon|StatsPersistence|PcapAdapter" || true)
+	@echo ""
+	@echo "==> Coverage summary:"
+	@cd $(BUILD_DIR) && lcov --summary coverage_filtered.info
+
+test-cpp: build
+	@echo "==> Running C++ tests only..."
+	cd $(BUILD_DIR) && ctest --output-on-failure --verbose
+
+test-python: config-ci venv
+	@echo "==> Running Python tests only..."
+	$(PYTEST) tests/integration/test_api.py -v
+
+coverage: test
+	@echo "==> Generating HTML coverage report..."
+	cd $(BUILD_DIR) && genhtml coverage_filtered.info --output-directory coverage_html
+	@echo "Coverage report: $(BUILD_DIR)/coverage_html/index.html"
+	$(OPEN_CMD) $(BUILD_DIR)/coverage_html/index.html 2>/dev/null || true
 
 clean:
+	@echo "==> Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
+	rm -f $(CONFIG_CI)
 
-.PHONY: all activate venv build run-daemon-online run-daemon-offline test clean
-
+.PHONY: all activate venv build rebuild run-daemon-online run-daemon-offline \
+		test test-cpp test-python coverage config-ci clean

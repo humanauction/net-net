@@ -221,33 +221,48 @@ target_link_libraries(test_stats_aggregator_integration
         ${EXTRA_LIBS}
 )
 
-# Production API daemon executable
-add_executable(netnet-daemon
-    src/daemon/Main.cpp
+# ============================================================
+# DAEMON LIBRARY (shared between production and testing)
+# ============================================================
+add_library(netnet-daemon-lib STATIC
     src/daemon/NetMonDaemon.cpp
 )
 
-target_include_directories(netnet-daemon
-    PRIVATE
+target_include_directories(netnet-daemon-lib
+    PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
         ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
         ${SQLITE3_INCLUDE_DIRS}
 )
 
-target_link_libraries(netnet-daemon
-    PRIVATE
-        netnet-core  # Provides all core functionality
+target_link_libraries(netnet-daemon-lib
+    PUBLIC
+        netnet-core
         yaml-cpp
-        pthread
         nlohmann_json::nlohmann_json
+        pthread
         ${SQLITE3_LIBRARIES}
         OpenSSL::SSL
         OpenSSL::Crypto
         ${EXTRA_LIBS}
 )
 
-# Unit test: Metrics endpoint
+# ============================================================
+# PRODUCTION API DAEMON EXECUTABLE
+# ============================================================
+add_executable(netnet-daemon
+    src/daemon/Main.cpp
+)
+
+target_link_libraries(netnet-daemon
+    PRIVATE
+        netnet-daemon-lib
+)
+
+# ============================================================
+# UNIT TEST: METRICS ENDPOINT
+# ============================================================
 add_executable(test_metrics_endpoint 
     tests/unit/test_metrics_endpoint.cpp
     src/core/StatsAggregator.cpp
@@ -270,10 +285,11 @@ target_link_libraries(test_metrics_endpoint
 )
 add_test(NAME test_metrics_endpoint COMMAND test_metrics_endpoint)
 
-# TEST: NetMon Daemon Integration
+# ============================================================
+# INTEGRATION TEST: NETMON DAEMON
+# ============================================================
 add_executable(test_netmon_daemon
     tests/integration/test_netmon_daemon.cpp
-    src/daemon/NetMonDaemon.cpp
 )
 
 target_include_directories(test_netmon_daemon
@@ -286,15 +302,9 @@ target_include_directories(test_netmon_daemon
 
 target_link_libraries(test_netmon_daemon
     PRIVATE
-        netnet-core
+        netnet-daemon-lib
         GTest::gtest
         GTest::gtest_main
-        yaml-cpp
-        nlohmann_json::nlohmann_json
-        pthread
-        ${SQLITE3_LIBRARIES}
-        OpenSSL::SSL
-        OpenSSL::Crypto
         ${EXTRA_LIBS}
 )
 
