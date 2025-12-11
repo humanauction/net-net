@@ -43,20 +43,10 @@ NETNET_GROUP ?= nobody
 clean-coverage:
 	@echo "🧹 Cleaning coverage data..."
 	@find $(BUILD_DIR) -name "*.gcda" -delete 2>/dev/null || true
-	@find $(BUILD_DIR) -name "*.gcno" -delete 2>/dev/null || true
 	@echo "✅ Coverage data cleaned"
 
-all: build
-
-activate:
-	@echo "Run: source .venv-netnet/bin/activate"
-
-venv:
-	@test -d $(VENV) || python3 -m venv $(VENV)
-	$(PIP) install -r requirements.txt || true
-
-build:
-	@echo "==> Building project with coverage instrumentation..."
+rebuild-coverage: clean
+	@echo "==> Rebuilding project with coverage instrumentation..."
 	cmake -S . -B $(BUILD_DIR) \
 		-G "Unix Makefiles" \
 		-DCMAKE_BUILD_TYPE=Debug \
@@ -64,22 +54,18 @@ build:
 		-DCMAKE_EXE_LINKER_FLAGS="--coverage"
 	cmake --build $(BUILD_DIR)
 
-rebuild: clean build
-
-config-ci:
-	@echo "==> Generating CI config..."
-	env NETNET_IFACE=$(NETNET_IFACE) NETNET_USER=$(NETNET_USER) NETNET_GROUP=$(NETNET_GROUP) \
-		envsubst < examples/sample-config.yaml > $(CONFIG_CI)
-
-# Check if gcovr is available
-GCOVR := $(shell command -v gcovr 2> /dev/null || echo "python3 -m gcovr")
-
 remove-vendor-coverage:
 	@echo "🧹 Removing vendor coverage files..."
 	@find $(BUILD_DIR) -path "*/vendor/*.gcda" -delete 2>/dev/null || true
 	@find $(BUILD_DIR) -path "*/include/net-net/vendor/*.gcda" -delete 2>/dev/null || true
 
-coverage: clean-coverage test remove-vendor-coverage
+# Check if gcovr is available
+GCOVR := $(shell command -v gcovr 2> /dev/null || echo "python3 -m gcovr")
+
+coverage: rebuild-coverage
+	@echo "==> Running tests..."
+	cd $(BUILD_DIR) && ctest --output-on-failure --quiet
+	@$(MAKE) remove-vendor-coverage
 	@echo "📊 Generating coverage report..."
 	@cd $(BUILD_DIR) && $(GCOVR) --root .. \
 		--exclude '.*tests/.*' \
@@ -88,7 +74,10 @@ coverage: clean-coverage test remove-vendor-coverage
 		--gcov-ignore-errors=no_working_dir_found \
 		--print-summary
 
-coverage-html: clean-coverage test remove-vendor-coverage
+coverage-html: rebuild-coverage
+	@echo "==> Running tests..."
+	cd $(BUILD_DIR) && ctest --output-on-failure --quiet
+	@$(MAKE) remove-vendor-coverage
 	@echo "📊 Generating HTML coverage report..."
 	@cd $(BUILD_DIR) && $(GCOVR) --root .. \
 		--exclude '.*tests/.*' \
