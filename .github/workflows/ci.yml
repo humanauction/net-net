@@ -199,12 +199,12 @@ jobs:
         sudo apt-get install -y \
           cmake build-essential libpcap-dev libssl-dev \
           libsqlite3-dev libyaml-cpp-dev nlohmann-json3-dev \
-          libgtest-dev pkg-config lcov gcovr
+          libgtest-dev pkg-config gcovr
 
     - name: Configure CMake with coverage
       run: |
         cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+          -DCMAKE_CXX_FLAGS="--coverage -g -O0" \
           -DCMAKE_EXE_LINKER_FLAGS="--coverage"
 
     - name: Build with coverage
@@ -224,11 +224,14 @@ jobs:
     - name: Generate C++ coverage report
       run: |
         cd build
-        lcov --capture --directory . --output-file coverage.info \
-          --ignore-errors inconsistent,unsupported,format
-        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/vendor/*' '*/googletest/*' \
-          --output-file coverage_filtered.info \
-          --ignore-errors inconsistent,unsupported,format
+        gcovr --root .. \
+          --exclude '.*tests/.*' \
+          --exclude '.*vendor/.*' \
+          --exclude '.*googletest/.*' \
+          --exclude '.*examples/.*' \
+          --exclude '/usr/.*' \
+          --xml-pretty --xml coverage.xml \
+          --print-summary
         cd ..
 
     - name: Set up Python
@@ -275,16 +278,7 @@ jobs:
     - name: Upload C++ coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
-        files: ./build/coverage_filtered.info
+        files: ./build/coverage.xml
         flags: cpp
         name: cpp-coverage
-        token: ${{ secrets.CODECOV_TOKEN }}
-
-    - name: Upload Python coverage to Codecov (if enabled)
-      if: false  # Disabled for now since Python tests don't generate coverage
-      uses: codecov/codecov-action@v5
-      with:
-        files: ./coverage-python.xml
-        flags: python
-        name: python-coverage
         token: ${{ secrets.CODECOV_TOKEN }}
