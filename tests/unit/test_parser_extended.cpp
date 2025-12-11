@@ -48,13 +48,14 @@ TEST_F(ParserExtendedTest, ParseICMPPacket) {
 }
 
 TEST_F(ParserExtendedTest, ParseTruncatedPacket) {
-    uint8_t pkt[10];
+    uint8_t pkt[20];
     createEthernetHeader(pkt, 0x0800);
+    memset(pkt + 14, 0, 6);
     
     PacketMeta meta;
     ParsedPacket out;
     
-    EXPECT_FALSE(parsePacket(pkt, 10, meta, out));
+    EXPECT_FALSE(parsePacket(pkt, 20, meta, out));
 }
 
 TEST_F(ParserExtendedTest, ParseZeroLengthPacket) {

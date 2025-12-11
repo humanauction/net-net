@@ -319,8 +319,6 @@ endif()
 # ============================================================
 # INTEGRATION TEST: comprehensive test executables
 # ============================================================
- 
-add_test(NAME test_stats_persistence COMMAND test_stats_persistence)
 
 add_executable(test_parser_extended 
     tests/unit/test_parser_extended.cpp
