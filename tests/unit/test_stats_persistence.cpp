@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "../core/StatsPersistence.h"
+#include "core/StatsPersistence.h"
 
 #include <chrono>
 #include <filesystem>

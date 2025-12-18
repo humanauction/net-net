@@ -221,6 +221,27 @@ target_link_libraries(test_stats_aggregator_integration
         ${EXTRA_LIBS}
 )
 
+# TEST Stats Persistence
+add_executable(test_stats_persistence
+    tests/unit/test_stats_persistence.cpp
+)
+
+target_include_directories(test_stats_persistence
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
+)
+
+target_link_libraries(test_stats_persistence
+    PRIVATE
+        netnet-core
+        GTest::gtest_main
+        pthread
+        ${EXTRA_LIBS}
+)
+
+add_test(NAME test_stats_persistence COMMAND test_stats_persistence)
+
 # ============================================================
 # DAEMON LIBRARY (shared between production and testing)
 # ============================================================

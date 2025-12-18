@@ -61,6 +61,7 @@ void StatsPersistence::saveWindow(const AggregatedStats& stats) {
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(db_, insert_sql, -1, &stmt, nullptr) != SQLITE_OK) {
         std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db_) << std::endl;
+        sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
         return;
     }
 
@@ -94,7 +95,7 @@ std::vector<AggregatedStats> StatsPersistence::loadHistory(size_t max_windows) {
 
     const char* select_sql =
         "WITH recent AS ("
-        "SELECT DISTINCT window_start"
+        "SELECT DISTINCT window_start "
         "FROM agg_stats "
         " ORDER BY window_start DESC "
         "LIMIT ?"
