@@ -239,7 +239,7 @@ jobs:
           --exclude '^CMake/' \
           --xml-pretty --xml coverage.xml \
           --print-summary \
-          --sort uncovered-number
+          --sort-uncovered
         cd ..
 
     - name: Set up Python
