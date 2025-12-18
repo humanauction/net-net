@@ -98,3 +98,162 @@ TEST(StatsAggregatorTest, CircularBufferOrder) {
     // Verify windows are in chronological order (oldest to newest)
     EXPECT_LE(history[0].window_start, history[1].window_start);
 }
+
+static ParsedPacket make_packet(
+    const std::string& iface,
+    const std::string& src_ip, uint16_t src_port,
+    const std::string& dst_ip, uint16_t dst_port,
+    uint8_t protocol,
+    uint8_t tcp_flags,
+    uint32_t cap_len,
+    int64_t ts_offset_sec
+) {
+    ParsedPacket pkt{};
+    pkt.meta.iface = iface;
+    pkt.meta.cap_len = cap_len;
+    pkt.meta.orig_len = cap_len;
+    pkt.meta.timestamp = std::chrono::system_clock::time_point{} + std::chrono::seconds(ts_offset_sec);
+
+    pkt.network.src_ip = src_ip;
+    pkt.network.dst_ip = dst_ip;
+    pkt.network.protocol = protocol;
+
+    pkt.transport.protocol = protocol;
+    pkt.transport.src_port = src_port;
+    pkt.transport.dst_port = dst_port;
+    pkt.transport.tcp_flags = tcp_flags;
+
+    return pkt;
+}
+
+// TEST currentStats before any advanceWindow is live current
+TEST(StatsAggregatorTest, CurrentStatsBeforeAnyAdvanceIsLiveCurrent) {
+    StatsAggregator agg(std::chrono::seconds(1), 3);
+
+    // count==0 path: should return impl_->current
+    EXPECT_TRUE(agg.history().empty());
+    EXPECT_TRUE(agg.currentStats().flows.empty());
+
+    auto pkt = make_packet("eth0", "10.0.0.1", 1234, "10.0.0.2", 80, /*tcp*/6, /*flags*/0, /*cap*/60, /*ts*/1);
+    agg.ingest(pkt);
+
+    const auto& current = agg.currentStats();
+    EXPECT_EQ(current.flows.size(), 1u);
+
+    FlowKey key;
+    key.iface = "eth0";
+    key.protocol = 6;
+    key.src_ip = "10.0.0.1";
+    key.src_port = 1234;
+    key.dst_ip = "10.0.0.2";
+    key.dst_port = 80;
+
+    auto it = current.flows.find(key);
+    ASSERT_NE(it, current.flows.end());
+
+    // For 10.0.0.1 < 10.0.0.2, direction should be c2s.
+    EXPECT_EQ(it->second.pkts_c2s, 1u);
+    EXPECT_EQ(it->second.bytes_c2s, 60u);
+    EXPECT_EQ(it->second.pkts_s2c, 0u);
+    EXPECT_EQ(it->second.bytes_s2c, 0u);
+}
+
+// TEST AdvanceWindow creates new window and saves old one
+TEST(StatsAggregatorTest, AdvanceWindowSeparatesWindows) {
+    StatsAggregator agg(std::chrono::seconds(1), 3);
+
+    FlowKey key;
+    key.iface = "eth0";
+    key.protocol = 17;
+    key.src_ip = "1.1.1.1";
+    key.src_port = 5000;
+    key.dst_ip = "2.2.2.2";
+    key.dst_port = 53;
+
+    // Window 0: cap_len=60
+    agg.ingest(make_packet("eth0", "1.1.1.1", 5000, "2.2.2.2", 53, /*udp*/17, 0, 60, 10));
+    agg.advanceWindow();
+
+    // Window 1: cap_len=10 (should not accumulate with previous window)
+    agg.ingest(make_packet("eth0", "1.1.1.1", 5000, "2.2.2.2", 53, /*udp*/17, 0, 10, 11));
+    agg.advanceWindow();
+
+    auto hist = agg.history();
+    ASSERT_EQ(hist.size(), 2u);
+
+    auto it0 = hist[0].flows.find(key);
+    ASSERT_NE(it0, hist[0].flows.end());
+    EXPECT_EQ(it0->second.pkts_c2s + it0->second.pkts_s2c, 1u);
+    EXPECT_EQ(it0->second.bytes_c2s + it0->second.bytes_s2c, 60u);
+
+    auto it1 = hist[1].flows.find(key);
+    ASSERT_NE(it1, hist[1].flows.end());
+    EXPECT_EQ(it1->second.pkts_c2s + it1->second.pkts_s2c, 1u);
+    EXPECT_EQ(it1->second.bytes_c2s + it1->second.bytes_s2c, 10u);
+}
+
+// TEST Direction branch can hit s2c
+TEST(StatsAggregatorTest, DirectionBranchCanHitS2C) {
+    StatsAggregator agg(std::chrono::seconds(1), 3);
+
+    // Make src_ip > dst_ip lexicographically so is_c2s becomes false.
+    auto pkt = make_packet("eth0", "9.9.9.9", 1234, "1.1.1.1", 80, /*udp*/17, 0, 42, 1);
+    agg.ingest(pkt);
+
+    FlowKey key;
+    key.iface = "eth0";
+    key.protocol = 17;
+    key.src_ip = "9.9.9.9";
+    key.src_port = 1234;
+    key.dst_ip = "1.1.1.1";
+    key.dst_port = 80;
+
+    const auto& current = agg.currentStats();
+    auto it = current.flows.find(key);
+    ASSERT_NE(it, current.flows.end());
+
+    EXPECT_EQ(it->second.pkts_c2s, 0u);
+    EXPECT_EQ(it->second.bytes_c2s, 0u);
+    EXPECT_EQ(it->second.pkts_s2c, 1u);
+    EXPECT_EQ(it->second.bytes_s2c, 42u);
+
+    // UDP else-branch: NEW -> ESTABLISHED
+    EXPECT_EQ(it->second.state, FlowStats::ESTABLISHED);
+}
+
+// TEST TCP state transitions: SYN -> ACK -> FIN
+TEST(StatsAggregatorTest, TcpStateTransitionsSynAckFin) {
+    StatsAggregator agg(std::chrono::seconds(1), 3);
+
+    FlowKey key;
+    key.iface = "eth0";
+    key.protocol = 6;
+    key.src_ip = "10.0.0.1";
+    key.src_port = 1111;
+    key.dst_ip = "10.0.0.2";
+    key.dst_port = 2222;
+
+    // SYN sets NEW
+    agg.ingest(make_packet("eth0", "10.0.0.1", 1111, "10.0.0.2", 2222, /*tcp*/6, /*SYN*/0x02, 60, 1));
+    {
+        auto it = agg.currentStats().flows.find(key);
+        ASSERT_NE(it, agg.currentStats().flows.end());
+        EXPECT_EQ(it->second.state, FlowStats::NEW);
+    }
+
+    // ACK should move NEW -> ESTABLISHED
+    agg.ingest(make_packet("eth0", "10.0.0.1", 1111, "10.0.0.2", 2222, /*tcp*/6, /*ACK*/0x10, 60, 2));
+    {
+        auto it = agg.currentStats().flows.find(key);
+        ASSERT_NE(it, agg.currentStats().flows.end());
+        EXPECT_EQ(it->second.state, FlowStats::ESTABLISHED);
+    }
+
+    // FIN sets CLOSING
+    agg.ingest(make_packet("eth0", "10.0.0.1", 1111, "10.0.0.2", 2222, /*tcp*/6, /*FIN*/0x01, 60, 3));
+    {
+        auto it = agg.currentStats().flows.find(key);
+        ASSERT_NE(it, agg.currentStats().flows.end());
+        EXPECT_EQ(it->second.state, FlowStats::CLOSING);
+    }
+}

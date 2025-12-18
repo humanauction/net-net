@@ -2,6 +2,7 @@
 #include <chrono>
 #include <unordered_map>
 #include <vector>
+#include <memory>
 #include "core/ConnectionTracker.h"
 #include "core/Parser.h"
 
