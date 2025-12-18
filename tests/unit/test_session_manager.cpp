@@ -135,11 +135,12 @@ TEST_F(SessionManagerTest, CreateSessionSetsTimestampsCorrectly) {
     EXPECT_GE(created_at_seconds, before_create);
     EXPECT_LE(created_at_seconds, after_create);
 
-    // last_activity should === created_at initially (per current implementation expectation)
+    // last_activity should === created_at initially
     EXPECT_EQ(created_at_seconds, last_activity_seconds);
 
     // Force last_activity far in the past, then validate to ensure it updates (no sleeps).
-    set_last_activity(test_db_path_, token, now_sec() - 100);
+    const int64_t forced_old_ts = now_sec() - 100;
+    set_last_activity(test_db_path_, token, forced_old_ts);
 
     SessionData data2{};
     ASSERT_TRUE(manager_->validateSession(token, data2));
@@ -148,7 +149,12 @@ TEST_F(SessionManagerTest, CreateSessionSetsTimestampsCorrectly) {
     auto last_activity_seconds2 = std::chrono::time_point_cast<std::chrono::seconds>(data2.last_activity);
 
     EXPECT_EQ(created_at_seconds, created_at_seconds2) << "created_at should never change";
-    EXPECT_GT(last_activity_seconds2, last_activity_seconds) << "last_activity should advance on validation";
+
+    // Stable check: last_activity should move forward relative to the forced-old DB value.
+    const auto forced_old_tp =
+        std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::from_time_t(forced_old_ts));
+    EXPECT_GT(last_activity_seconds2, forced_old_tp)
+        << "last_activity should be updated to 'now' and therefore be > forced-old timestamp";
 }
 
 // TEST 5: createSession() accepts special characters in username
