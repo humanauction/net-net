@@ -3,13 +3,13 @@
 
 #include <unistd.h>
 #include <regex>
-#include <thread>
 #include <sqlite3.h>
 #include <chrono>
 #include <cstdio>
-#include <cstring>
 #include <string>
 #include <sys/stat.h>
+#include <cstdint>
+#include <stdexcept>
 
 namespace {
 
@@ -19,23 +19,7 @@ static int64_t now_sec() {
     return std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
 }
 
-static void exec_sql(const std::string& db_path, const char* sql) {
-    sqlite3* db = nullptr;
-    ASSERT_EQ(sqlite3_open(db_path.c_str(), &db), SQLITE_OK);
-
-    char* err = nullptr;
-    const int rc = sqlite3_exec(db, sql, nullptr, nullptr, &err);
-    if (rc != SQLITE_OK) {
-        std::string msg = err ? err : "";
-        sqlite3_free(err);
-        sqlite3_close(db);
-        FAIL() << "sqlite3_exec failed rc=" << rc << " err=" << msg << " sql=" << sql;
-    }
-
-    sqlite3_close(db);
-}
-
-// Assumes schema has: sessions(token TEXT PRIMARY KEY, last_activity INTEGER, ...)
+// Helper to set last_activity timestamp directly in DB for a given token
 static void set_last_activity(const std::string& db_path, const std::string& token, int64_t ts) {
     sqlite3* db = nullptr;
     ASSERT_EQ(sqlite3_open(db_path.c_str(), &db), SQLITE_OK);
@@ -129,29 +113,30 @@ TEST(SessionManagerStandaloneTest, ConstructorThrowsWhenDbIsReadOnly) {
 TEST_F(SessionManagerTest, ValidateSessionReturnsTrueEvenIfLastActivityUpdateIsBusy) {
     const std::string token = manager_->createSession("locktest", "127.0.0.1");
 
-    // Force last_activity old so we can detect whether UPDATE applied.
     const int64_t forced_old_ts = now_sec() - 100;
     set_last_activity(test_db_path_, token, forced_old_ts);
 
-    // Hold a write lock from a separate connection.
     sqlite3* db2 = nullptr;
     ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db2), SQLITE_OK);
 
-    // Try to acquire a write lock without blocking readers (WAL helps here).
+    // Ensure we always release the lock + close, even if an EXPECT fails.
+    auto cleanup = [&]() {
+        exec_sql_raw(db2, "ROLLBACK;");
+        sqlite3_close(db2);
+        db2 = nullptr;
+    };
+
     exec_sql_raw(db2, "BEGIN IMMEDIATE;");
 
     SessionData out{};
-    ASSERT_TRUE(manager_->validateSession(token, out));
+    EXPECT_TRUE(manager_->validateSession(token, out));
 
-    // If UPDATE failed due to SQLITE_BUSY, implementation falls back to OLD timestamp.
     const auto forced_old_tp =
         std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::from_time_t(forced_old_ts));
     const auto out_last_tp = std::chrono::time_point_cast<std::chrono::seconds>(out.last_activity);
-    EXPECT_EQ(out_last_tp, forced_old_tp) << "Expected last_activity fallback when UPDATE is blocked";
+    EXPECT_EQ(out_last_tp, forced_old_tp);
 
-    // Release lock and verify update works afterward.
-    exec_sql_raw(db2, "ROLLBACK;");
-    sqlite3_close(db2);
+    cleanup();
 
     SessionData out2{};
     ASSERT_TRUE(manager_->validateSession(token, out2));
