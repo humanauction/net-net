@@ -1,6 +1,7 @@
 #include "core/StatsPersistence.h"
 #include <sqlite3.h>
 #include <iostream>
+#include <map>
 
 StatsPersistence::StatsPersistence(const std::string& db_path)
     : db_path_(db_path), db_(nullptr) {
@@ -92,8 +93,18 @@ std::vector<AggregatedStats> StatsPersistence::loadHistory(size_t max_windows) {
     std::vector<AggregatedStats> history;
 
     const char* select_sql =
-        "SELECT window_start, iface, protocol, src_ip, src_port, dst_ip, dst_port, pkts_c2s, pkts_s2c, bytes_c2s, bytes_s2c "
-        "FROM agg_stats ORDER BY window_start DESC LIMIT ?;";
+        "WITH recent AS ("
+        "SELECT DISTINCT window_start"
+        "FROM agg_stats "
+        " ORDER BY window_start DESC "
+        "LIMIT ?"
+        ") "
+        "SELECT a.window_start, a.iface, a.protocol, a.src_ip, a.src_port, a.dst_ip, a.dst_port, "
+        "       a.pkts_c2s, a.pkts_s2c, a.bytes_c2s, a.bytes_s2c "
+        "FROM agg_stats a "
+        "JOIN recent r ON a.window_start = r.window_start "
+        "ORDER BY a.window_start DESC;";
+
     sqlite3_stmt* stmt;
 
     if (sqlite3_prepare_v2(db_, select_sql, -1, &stmt, nullptr) != SQLITE_OK) {
@@ -102,7 +113,8 @@ std::vector<AggregatedStats> StatsPersistence::loadHistory(size_t max_windows) {
     }
     sqlite3_bind_int(stmt, 1, static_cast<int>(max_windows));
 
-    std::unordered_map<int64_t, AggregatedStats> windows;
+    std::map<int64_t, AggregatedStats, std::greater<int64_t>> windows;
+    
     int rc;
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         int64_t window_start = sqlite3_column_int64(stmt, 0);
