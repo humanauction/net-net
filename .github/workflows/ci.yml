@@ -228,15 +228,15 @@ jobs:
 
     - name: Generate C++ coverage report
       run: |
-        cd build
         gcovr --root .. \
-          --filter '(^|.*/)(src|include)/' \
-          --exclude '(^|.*/)include/net-net/vendor/' \
-          --exclude '(^|.*/)tests/' \
-          --exclude '(^|.*/)examples/' \
-          --exclude '(^|.*/)src/main\.cpp$' \
-          --exclude '(^|.*/)src/daemon/Main\.cpp$' \
-          --exclude '/usr/.*' \
+          --filter '^src/' \
+          --filter '^include/net-net/' \
+          --exclude '^include/net-net/vendor/' \
+          --exclude '^tests/' \
+          --exclude '^examples/' \
+          --exclude '^src/main\.cpp$' \
+          --exclude '^src/daemon/Main\.cpp$' \
+          --exclude '^CMake/' \
           --xml-pretty --xml coverage.xml \
           --print-summary \
           --sort uncovered-number --sort-reverse
