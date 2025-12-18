@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <sys/stat.h>
 
 namespace {
 
@@ -52,7 +53,18 @@ static void set_last_activity(const std::string& db_path, const std::string& tok
     sqlite3_close(db);
 }
 
+static void exec_sql_raw(sqlite3* db, const char* sql) {
+    char* err = nullptr;
+    const int rc = sqlite3_exec(db, sql, nullptr, nullptr, &err);
+    if (rc != SQLITE_OK) {
+        std::string msg = err ? err : "";
+        sqlite3_free(err);
+        FAIL() << "sqlite3_exec failed rc=" << rc << " err=" << msg << " sql=" << sql;
+    }
+}
+
 } // namespace
+
 
 // Test fixtures for SessionManager tests
 class SessionManagerTest : public ::testing::Test {
@@ -77,7 +89,77 @@ protected:
     }
 };
 
-// TEST 1: createSession() returns valid UUID v4 token
+
+// =====================================
+//  Test Cases
+// =====================================
+
+// TEST Constructor throws when DB path cannot be opened
+TEST(SessionManagerStandaloneTest, ConstructorThrowsWhenDbPathCannotBeOpened) {
+    const std::string bad_dir = "/tmp/netnet-no-such-dir-" + std::to_string(getpid());
+    const std::string db_path = bad_dir + "/sessions.db";
+
+    // Directory does not exist => sqlite3_open should fail => constructor throws.
+    EXPECT_THROW({ SessionManager sm(db_path, 10); }, std::runtime_error);
+}
+
+
+// TEST Constructor throws when DB is read-only
+TEST(SessionManagerStandaloneTest, ConstructorThrowsWhenDbIsReadOnly) {
+    const std::string db_path = "/tmp/netnet-readonly-" + std::to_string(getpid()) + ".db";
+    unlink(db_path.c_str());
+
+    // Create an empty file, then make it read-only.
+    {
+        std::FILE* f = std::fopen(db_path.c_str(), "w");
+        ASSERT_NE(f, nullptr);
+        std::fclose(f);
+    }
+    ASSERT_EQ(chmod(db_path.c_str(), 0444), 0);
+
+    // initDatabase() will attempt CREATE TABLE and should fail on read-only db => throws.
+    EXPECT_THROW({ SessionManager sm(db_path, 10); }, std::runtime_error);
+
+    // Cleanup
+    ASSERT_EQ(chmod(db_path.c_str(), 0644), 0);
+    unlink(db_path.c_str());
+}
+
+// TEST validateSession() returns true even if last_activity UPDATE is blocked
+TEST_F(SessionManagerTest, ValidateSessionReturnsTrueEvenIfLastActivityUpdateIsBusy) {
+    const std::string token = manager_->createSession("locktest", "127.0.0.1");
+
+    // Force last_activity old so we can detect whether UPDATE applied.
+    const int64_t forced_old_ts = now_sec() - 100;
+    set_last_activity(test_db_path_, token, forced_old_ts);
+
+    // Hold a write lock from a separate connection.
+    sqlite3* db2 = nullptr;
+    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db2), SQLITE_OK);
+
+    // Try to acquire a write lock without blocking readers (WAL helps here).
+    exec_sql_raw(db2, "BEGIN IMMEDIATE;");
+
+    SessionData out{};
+    ASSERT_TRUE(manager_->validateSession(token, out));
+
+    // If UPDATE failed due to SQLITE_BUSY, implementation falls back to OLD timestamp.
+    const auto forced_old_tp =
+        std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::from_time_t(forced_old_ts));
+    const auto out_last_tp = std::chrono::time_point_cast<std::chrono::seconds>(out.last_activity);
+    EXPECT_EQ(out_last_tp, forced_old_tp) << "Expected last_activity fallback when UPDATE is blocked";
+
+    // Release lock and verify update works afterward.
+    exec_sql_raw(db2, "ROLLBACK;");
+    sqlite3_close(db2);
+
+    SessionData out2{};
+    ASSERT_TRUE(manager_->validateSession(token, out2));
+    const auto out2_last_tp = std::chrono::time_point_cast<std::chrono::seconds>(out2.last_activity);
+    EXPECT_GT(out2_last_tp, forced_old_tp);
+}
+
+// TEST createSession() returns valid UUID v4 token
 TEST_F(SessionManagerTest, CreateSessionReturnsValidUUID) {
     std::string token = manager_->createSession("testuser", "192.168.1.100");
 
@@ -92,7 +174,7 @@ TEST_F(SessionManagerTest, CreateSessionReturnsValidUUID) {
     EXPECT_EQ(token.length(), 36) << "UUID must be 36 characters in length";
 }
 
-// TEST 2: createSession() generates unique token
+// TEST createSession() generates unique token
 TEST_F(SessionManagerTest, CreateSessionGeneratesUniqueToken) {
     std::string token1 = manager_->createSession("user","192.168.1.1");
     std::string token2 = manager_->createSession("user","192.168.1.2");
@@ -103,7 +185,7 @@ TEST_F(SessionManagerTest, CreateSessionGeneratesUniqueToken) {
     EXPECT_NE(token2, token3);
 }
 
-// TEST 3: createSession() persists to database
+// TEST createSession() persists to database
 TEST_F(SessionManagerTest, CreateSessionPersistsToDatabase) {
     std::string token = manager_->createSession("admin", "10.0.0.1");
 
@@ -116,7 +198,7 @@ TEST_F(SessionManagerTest, CreateSessionPersistsToDatabase) {
     EXPECT_EQ(data.token, token);
 }
 
-// TEST 4: createSession() sets correct timestamps, validateSession updates last_activity
+// TEST createSession() sets correct timestamps, validateSession updates last_activity
 TEST_F(SessionManagerTest, CreateSessionSetsTimestampsCorrectly) {
     // Truncate to second precision (matching typical SQLite storage)
     auto now = std::chrono::system_clock::now();
@@ -157,7 +239,7 @@ TEST_F(SessionManagerTest, CreateSessionSetsTimestampsCorrectly) {
         << "last_activity should be updated to 'now' and therefore be > forced-old timestamp";
 }
 
-// TEST 5: createSession() accepts special characters in username
+// TEST createSession() accepts special characters in username
 TEST_F(SessionManagerTest, CreateSessionAcceptsSpecialCharacters) {
     std::string token = manager_->createSession("user@example.com", "192.168.1.1");
 
@@ -166,7 +248,7 @@ TEST_F(SessionManagerTest, CreateSessionAcceptsSpecialCharacters) {
     EXPECT_EQ(data.username, "user@example.com");
 }
 
-// TEST 6: createSession() accepts IPv6 addresses
+// TEST createSession() accepts IPv6 addresses
 TEST_F(SessionManagerTest, CreateSessionAcceptsIPv6) {
     std::string token = manager_->createSession("testuser", "2001:0db8:85a3::8a2e:0370:7334");
 
@@ -181,7 +263,7 @@ TEST_F(SessionManagerTest, ValidateUnknownTokenReturnsFalse) {
     EXPECT_FALSE(manager_->validateSession("does-not-exist", out));
 }
 
-// TEST 7 (refactored): validateSession() rejects expired sessions (no sleep; direct timestamp)
+// TEST validateSession() rejects expired sessions (no sleep; direct timestamp)
 TEST_F(SessionManagerTest, ValidateSessionRejectsExpired) {
     std::string test_db = "/tmp/test_session_expired_" + std::to_string(getpid()) + ".db";
     unlink(test_db.c_str());
@@ -203,7 +285,7 @@ TEST_F(SessionManagerTest, ValidateSessionRejectsExpired) {
     unlink(test_db.c_str());
 }
 
-// ADDITION: expiry boundary at exactly limit is valid (now - last_activity == expiry)
+// TEST validateSession() accepts sessions exactly at expiry boundary
 TEST_F(SessionManagerTest, ExpiryBoundaryExactlyAtLimitIsStillValid) {
     std::string test_db = "/tmp/test_session_boundary_" + std::to_string(getpid()) + ".db";
     unlink(test_db.c_str());
@@ -219,7 +301,7 @@ TEST_F(SessionManagerTest, ExpiryBoundaryExactlyAtLimitIsStillValid) {
     unlink(test_db.c_str());
 }
 
-// ADDITION: expiry near-boundary is valid (avoid exact-equality flake on second rollover)
+// TEST validateSession() accepts sessions just inside expiry boundary
 TEST_F(SessionManagerTest, ExpiryNearBoundaryIsStillValid) {
     std::string test_db = "/tmp/test_session_boundary_" + std::to_string(getpid()) + ".db";
     unlink(test_db.c_str());
@@ -236,7 +318,7 @@ TEST_F(SessionManagerTest, ExpiryNearBoundaryIsStillValid) {
     unlink(test_db.c_str());
 }
 
-// Cleanup boundary: last_activity == cutoff must be kept (strict '<' delete)
+// TEST cleanupExpired() keeps sessions with last_activity exactly at cutoff, deletes strictly older
 TEST_F(SessionManagerTest, CleanupBoundaryKeepsEqualCutoffDeletesStrictlyOlder) {
     std::string test_db = "/tmp/test_session_cleanup_boundary_" + std::to_string(getpid()) + ".db";
     unlink(test_db.c_str());
@@ -260,7 +342,7 @@ TEST_F(SessionManagerTest, CleanupBoundaryKeepsEqualCutoffDeletesStrictlyOlder) 
     unlink(test_db.c_str());
 }
 
-// TEST 8: deleteSession() removes session
+// TEST deleteSession() removes session
 TEST_F(SessionManagerTest, DeleteSessionRemovesSession) {
     std::string token = manager_->createSession("testuser", "127.0.0.1");
 
@@ -275,7 +357,7 @@ TEST_F(SessionManagerTest, DeleteSessionRemovesSession) {
         << "Session should not exist after deletion";
 }
 
-// TEST 9 (refactored): cleanupExpired() removes old sessions (no sleep; direct timestamp)
+// TEST cleanupExpired() removes old sessions (no sleep; direct timestamp)
 TEST_F(SessionManagerTest, CleanupExpiredRemovesOldSessions) {
     std::string test_db = "/tmp/test_session_cleanup_" + std::to_string(getpid()) + ".db";
     unlink(test_db.c_str());
@@ -299,7 +381,7 @@ TEST_F(SessionManagerTest, CleanupExpiredRemovesOldSessions) {
     unlink(test_db.c_str());
 }
 
-// ADDITION: cleanupExpired removes expired but keeps recent
+// TEST cleanupExpired() removes expired but keeps recent
 TEST_F(SessionManagerTest, CleanupExpiredRemovesOldButKeepsRecent) {
     std::string test_db = "/tmp/test_session_cleanup_keep_" + std::to_string(getpid()) + ".db";
     unlink(test_db.c_str());

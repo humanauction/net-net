@@ -228,7 +228,8 @@ jobs:
 
     - name: Generate C++ coverage report
       run: |
-        gcovr --root .. \
+        gcovr --root . \
+          --object-directory build \
           --filter '^src/' \
           --filter '^include/net-net/' \
           --exclude '^include/net-net/vendor/' \
@@ -237,10 +238,9 @@ jobs:
           --exclude '^src/main\.cpp$' \
           --exclude '^src/daemon/Main\.cpp$' \
           --exclude '^CMake/' \
-          --xml-pretty --xml coverage.xml \
+          --xml-pretty --xml build/coverage.xml \
           --print-summary \
           --sort-uncovered
-        cd ..
 
     - name: Set up Python
       uses: actions/setup-python@v5

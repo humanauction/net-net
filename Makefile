@@ -114,10 +114,12 @@ coverage-html: rebuild-coverage
 		--exclude '.*vendor/.*' \
 		--exclude '.*googletest/.*' \
 		--exclude '.*examples/.*' \
+		--exclude '.*build/.*' \
+		--exclude '.*CMakeFiles/.*' \
 		--exclude '.*/src/main\.cpp$$' \
 		--exclude '.*/src/daemon/Main\.cpp$$' \
 		--gcov-ignore-errors=no_working_dir_found \
-		--html-details coverage.html
+		--html-details -o coverage.html
 	@echo "✅ Coverage report: $(BUILD_DIR)/coverage.html"
 	@$(OPEN_CMD) "$(BUILD_DIR)/coverage.html" 2>/dev/null || true
 
