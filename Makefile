@@ -11,7 +11,7 @@
 # make test                 # Run ALL tests (C++ + Python) with coverage
 # make test-cpp             # Run C++ tests only
 # make test-python          # Run Python tests only
-# make coverage             # Generate HTML coverage report
+# make coverage             # make HTML coverage report
 # make clean                # Clean all build artifacts
 
 VENV=.venv-netnet

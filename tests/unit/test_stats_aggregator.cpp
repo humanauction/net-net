@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 #include <cstring>
 
-static ParsedPacket make_udp_packet(const std::string& iface, const std::string& src_ip, uint16_t src_port,
+[[maybe_unused]] static ParsedPacket make_udp_packet(const std::string& iface, const std::string& src_ip, uint16_t src_port,
                                    const std::string& dst_ip, uint16_t dst_port, uint64_t ts_offset = 0) {
     uint8_t pkt[42] = {0};
     pkt[12] = 0x08; pkt[13] = 0x00; // Ethertype IPv4
@@ -124,6 +124,29 @@ static ParsedPacket make_packet(
     pkt.transport.tcp_flags = tcp_flags;
 
     return pkt;
+}
+
+// TEST Direction uses numeric IP ordering, not lexicographic
+TEST(StatsAggregatorTest, DirectionUsesNumericIpOrderingNotLexicographic) {
+    StatsAggregator agg(std::chrono::seconds(1), 3);
+
+    // Numeric: 10.0.0.9 < 10.0.0.10, so this should be c2s.
+    agg.ingest(make_packet("eth0", "10.0.0.9", 1234, "10.0.0.10", 80, /*tcp*/6, /*flags*/0, 60, 1));
+
+    FlowKey key;
+    key.iface = "eth0";
+    key.protocol = 6;
+    key.src_ip = "10.0.0.9";
+    key.src_port = 1234;
+    key.dst_ip = "10.0.0.10";
+    key.dst_port = 80;
+
+    const auto& cur = agg.currentStats();
+    auto it = cur.flows.find(key);
+    ASSERT_NE(it, cur.flows.end());
+
+    EXPECT_EQ(it->second.pkts_c2s, 1u);
+    EXPECT_EQ(it->second.pkts_s2c, 0u);
 }
 
 // TEST currentStats before any advanceWindow is live current

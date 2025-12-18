@@ -1,6 +1,66 @@
 #include "core/StatsAggregator.h"
 #include "core/Parser.h"
 
+#include <algorithm>
+#include <arpa/inet.h>
+#include <array>
+#include <cstring>
+#include <tuple>
+
+
+namespace {
+
+struct ParsedIp {
+    int family = AF_UNSPEC;                 // AF_INET / AF_INET6 / AF_UNSPEC
+    std::array<unsigned char, 16> bytes{};  // big enough for IPv6
+    size_t len = 0;
+};
+
+static ParsedIp parse_ip(const std::string& s) {
+    ParsedIp out{};
+
+    in_addr v4{};
+    if (::inet_pton(AF_INET, s.c_str(), &v4) == 1) {
+        out.family = AF_INET;
+        out.len = 4;
+        std::memcpy(out.bytes.data(), &v4, 4);
+        return out;
+    }
+
+    in6_addr v6{};
+    if (::inet_pton(AF_INET6, s.c_str(), &v6) == 1) {
+        out.family = AF_INET6;
+        out.len = 16;
+        std::memcpy(out.bytes.data(), &v6, 16);
+        return out;
+    }
+
+    return out; // AF_UNSPEC
+}
+
+// True if (ip_a, port_a) is "less than or equal to" (ip_b, port_b) in a stable, numeric-aware way.
+static bool endpoint_leq(const std::string& ip_a, uint16_t port_a,
+                         const std::string& ip_b, uint16_t port_b) {
+    const auto a = parse_ip(ip_a);
+    const auto b = parse_ip(ip_b);
+
+    // Numeric compare when both parse and share same family/size.
+    if (a.family != AF_UNSPEC && b.family != AF_UNSPEC && a.family == b.family && a.len == b.len) {
+        const int cmp = std::memcmp(a.bytes.data(), b.bytes.data(), a.len);
+        if (cmp != 0) return cmp < 0;
+        return port_a <= port_b;
+    }
+
+    // Prefer parsed IPs over unparsed for stability.
+    if (a.family != AF_UNSPEC && b.family == AF_UNSPEC) return true;
+    if (a.family == AF_UNSPEC && b.family != AF_UNSPEC) return false;
+
+    // Fallback: string compare (should be rare if inputs are real IPs).
+    if (ip_a != ip_b) return ip_a < ip_b;
+    return port_a <= port_b;
+}
+
+} // namespace
 
 StatsAggregator::StatsAggregator(std::chrono::seconds window_size, size_t history_depth)
     
@@ -61,9 +121,11 @@ void StatsAggregator::ingest(const ParsedPacket& packet) {
     }
     stats.last_seen = now;
 
-    // Direction: c2s or s2c
-    bool is_c2s = (key.src_ip < key.dst_ip) ||
-                  (key.src_ip == key.dst_ip && key.src_port < key.dst_port);
+    // Direction: c2s or s2c (numeric IP compare; stable fallback)
+    const bool is_c2s = endpoint_leq(
+        key.src_ip, key.src_port,
+        key.dst_ip, key.dst_port
+    );
 
     if (is_c2s) {
         stats.bytes_c2s += packet.meta.cap_len;
