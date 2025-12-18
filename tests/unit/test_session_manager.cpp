@@ -10,8 +10,26 @@
 #include <sys/stat.h>
 #include <cstdint>
 #include <stdexcept>
+#include <memory>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace {
+
+// Scope guard (keep ABOVE any function that uses ScopeExit)
+template <class F>
+class ScopeExit {
+public:
+    explicit ScopeExit(F f) : f_(std::move(f)), active_(true) {}
+    ~ScopeExit() { if (active_) f_(); }
+    ScopeExit(const ScopeExit&) = delete;
+    ScopeExit& operator=(const ScopeExit&) = delete;
+    void dismiss() { active_ = false; }
+private:
+    F f_;
+    bool active_;
+};
 
 // Seconds since epoch (matches typical SQLite INTEGER seconds usage)
 static int64_t now_sec() {
@@ -23,18 +41,22 @@ static int64_t now_sec() {
 static void set_last_activity(const std::string& db_path, const std::string& token, int64_t ts) {
     sqlite3* db = nullptr;
     ASSERT_EQ(sqlite3_open(db_path.c_str(), &db), SQLITE_OK);
+    ScopeExit cleanup_db([&] {
+        if (db) sqlite3_close(db);
+        db = nullptr;
+    });
 
     const char* sql = "UPDATE sessions SET last_activity = ? WHERE token = ?";
     sqlite3_stmt* stmt = nullptr;
     ASSERT_EQ(sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr), SQLITE_OK);
+    ScopeExit cleanup_stmt([&] {
+        if (stmt) sqlite3_finalize(stmt);
+        stmt = nullptr;
+    });
 
     ASSERT_EQ(sqlite3_bind_int64(stmt, 1, ts), SQLITE_OK);
     ASSERT_EQ(sqlite3_bind_text(stmt, 2, token.c_str(), -1, SQLITE_TRANSIENT), SQLITE_OK);
-
     ASSERT_EQ(sqlite3_step(stmt), SQLITE_DONE);
-
-    sqlite3_finalize(stmt);
-    sqlite3_close(db);
 }
 
 static void exec_sql_raw(sqlite3* db, const char* sql) {
@@ -47,32 +69,31 @@ static void exec_sql_raw(sqlite3* db, const char* sql) {
     }
 }
 
-} // namespace
-
+static fs::path unique_db_path(const std::string& prefix) {
+    const auto now_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+    return fs::temp_directory_path() / (prefix + "-" + std::to_string(getpid()) + "-" + std::to_string(now_ns) + ".db");
+}
 
 // Test fixtures for SessionManager tests
 class SessionManagerTest : public ::testing::Test {
 protected:
     std::string test_db_path_;
-    SessionManager* manager_;
+    std::unique_ptr<SessionManager> manager_;
 
     void SetUp() override {
-        // Create unique-ish test database in /tmp
-        test_db_path_ = "/tmp/test_session_" + std::to_string(getpid()) + ".db";
-
-        // Remove if exists from previous failed test
+        test_db_path_ = unique_db_path("test_session").string();
         unlink(test_db_path_.c_str());
-
-        // Create session manager with 3600s expiry
-        manager_ = new SessionManager(test_db_path_, 3600);
+        manager_ = std::make_unique<SessionManager>(test_db_path_, 3600);
     }
 
     void TearDown() override {
-        delete manager_;
+        manager_.reset();
         unlink(test_db_path_.c_str());
     }
 };
-
+}
 
 // =====================================
 //  Test Cases
@@ -116,31 +137,46 @@ TEST_F(SessionManagerTest, ValidateSessionReturnsTrueEvenIfLastActivityUpdateIsB
     const int64_t forced_old_ts = now_sec() - 100;
     set_last_activity(test_db_path_, token, forced_old_ts);
 
-    sqlite3* db2 = nullptr;
-    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db2), SQLITE_OK);
-
-    // Ensure we always release the lock + close, even if an EXPECT fails.
-    auto cleanup = [&]() {
-        exec_sql_raw(db2, "ROLLBACK;");
-        sqlite3_close(db2);
-        db2 = nullptr;
-    };
-
-    exec_sql_raw(db2, "BEGIN IMMEDIATE;");
-
-    SessionData out{};
-    EXPECT_TRUE(manager_->validateSession(token, out));
-
     const auto forced_old_tp =
-        std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::from_time_t(forced_old_ts));
-    const auto out_last_tp = std::chrono::time_point_cast<std::chrono::seconds>(out.last_activity);
-    EXPECT_EQ(out_last_tp, forced_old_tp);
+        std::chrono::time_point_cast<std::chrono::seconds>(
+            std::chrono::system_clock::from_time_t(forced_old_ts));
 
-    cleanup();
+    // Hold a write lock in a separate connection so the UPDATE in validateSession() fails.
+    {
+        sqlite3* db2 = nullptr;
+        ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db2), SQLITE_OK);
 
+        ScopeExit cleanup([&] {
+            if (!db2) return;
+            sqlite3_exec(db2, "ROLLBACK;", nullptr, nullptr, nullptr);
+            sqlite3_close(db2);
+            db2 = nullptr;
+        });
+
+        exec_sql_raw(db2, "BEGIN IMMEDIATE;");
+
+        SessionData out{};
+        EXPECT_TRUE(manager_->validateSession(token, out));
+
+        const auto out_last_tp =
+            std::chrono::time_point_cast<std::chrono::seconds>(out.last_activity);
+
+        // last_activity should NOT change because the UPDATE is blocked.
+        EXPECT_EQ(out_last_tp, forced_old_tp);
+
+        // Explicitly release the lock *before* leaving the scope (deterministic).
+        ASSERT_EQ(sqlite3_exec(db2, "ROLLBACK;", nullptr, nullptr, nullptr), SQLITE_OK);
+        ASSERT_EQ(sqlite3_close(db2), SQLITE_OK);
+        db2 = nullptr;
+        cleanup.dismiss();
+    }
+
+    // Now that the lock is gone, validateSession() should be able to update last_activity.
     SessionData out2{};
     ASSERT_TRUE(manager_->validateSession(token, out2));
-    const auto out2_last_tp = std::chrono::time_point_cast<std::chrono::seconds>(out2.last_activity);
+    const auto out2_last_tp =
+        std::chrono::time_point_cast<std::chrono::seconds>(out2.last_activity);
+
     EXPECT_GT(out2_last_tp, forced_old_tp);
 }
 
@@ -272,7 +308,7 @@ TEST_F(SessionManagerTest, ValidateSessionRejectsExpired) {
 
 // TEST validateSession() accepts sessions exactly at expiry boundary
 TEST_F(SessionManagerTest, ExpiryBoundaryExactlyAtLimitIsStillValid) {
-    std::string test_db = "/tmp/test_session_boundary_" + std::to_string(getpid()) + ".db";
+    const auto test_db = unique_db_path("test_session_boundary").string();
     unlink(test_db.c_str());
     SessionManager sm(test_db, 10);
 
@@ -288,13 +324,11 @@ TEST_F(SessionManagerTest, ExpiryBoundaryExactlyAtLimitIsStillValid) {
 
 // TEST validateSession() accepts sessions just inside expiry boundary
 TEST_F(SessionManagerTest, ExpiryNearBoundaryIsStillValid) {
-    std::string test_db = "/tmp/test_session_boundary_" + std::to_string(getpid()) + ".db";
+    const auto test_db = unique_db_path("test_session_boundary").string();
     unlink(test_db.c_str());
     SessionManager sm(test_db, 10);
 
     const std::string token = sm.createSession("bob", "10.0.0.1");
-
-    // (expiry - 1) keeps it deterministically valid even if "now" ticks once.
     set_last_activity(test_db, token, now_sec() - 9);
 
     SessionData out{};
