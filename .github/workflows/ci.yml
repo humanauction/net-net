@@ -230,13 +230,16 @@ jobs:
       run: |
         cd build
         gcovr --root .. \
-          --exclude '.*tests/.*' \
-          --exclude '.*vendor/.*' \
-          --exclude '.*googletest/.*' \
-          --exclude '.*examples/.*' \
+          --filter '(^|.*/)(src|include)/' \
+          --exclude '(^|.*/)include/net-net/vendor/' \
+          --exclude '(^|.*/)tests/' \
+          --exclude '(^|.*/)examples/' \
+          --exclude '(^|.*/)src/main\.cpp$' \
+          --exclude '(^|.*/)src/daemon/Main\.cpp$' \
           --exclude '/usr/.*' \
           --xml-pretty --xml coverage.xml \
-          --print-summary
+          --print-summary \
+          --sort uncovered-number --sort-reverse
         cd ..
 
     - name: Set up Python
