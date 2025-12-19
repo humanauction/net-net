@@ -28,6 +28,7 @@ pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 find_package(OpenSSL REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(SQLiteCpp REQUIRED)
 
 # Find or add cpp-httplib
 find_path(HTTPLIB_INCLUDE_DIR httplib.h
@@ -72,6 +73,7 @@ target_link_libraries(netnet-core
     PRIVATE
         ${PCAP_LIBRARIES}
         ${SQLITE3_LIBRARIES}
+        SQLiteCpp
         OpenSSL::SSL
         OpenSSL::Crypto        
         pthread

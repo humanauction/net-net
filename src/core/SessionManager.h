@@ -2,7 +2,8 @@
 #define SESSION_MANAGER_H
 
 #include <string>
-#include <sqlite3.h>
+#include <memory>
+#include <SQLiteCpp/SQLiteCpp.h>
 #include <chrono>
 
 struct SessionData {
@@ -18,18 +19,18 @@ public:
     SessionManager(const std::string& db_path, int expiry_seconds = 3600);
     ~SessionManager();
     // Create new session, returns token
-    std::string createSession(const std::string& username, const std::string& ip);
+    std::string createSession(const std::string& username, const std::string& client_ip);
     // Validate session token, update last_activity if valid
     bool validateSession(const std::string& token, SessionData& out_data);
     // Delete session (logout)
     void deleteSession(const std::string& token);
     // Cleanup expired sessions
     void cleanupExpired();
-private:
-    sqlite3* db_;
-    int expiry_seconds_;
 
-    void initDatabase();
+private:
+    std::unique_ptr<SQLite::Database> db_;
+    std::string db_path_;
+    int expiry_seconds_;
 };
 
 #endif // SESSION_MANAGER_H
