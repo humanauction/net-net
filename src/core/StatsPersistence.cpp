@@ -12,6 +12,20 @@ StatsPersistence::StatsPersistence(const std::string& db_path)
         throw std::runtime_error("Failed to open database: " + error);
     }
 
+    // Add WAL mode and busy timeout
+    char* err_msg = nullptr;
+    sqlite3_exec(db_, "PRAGMA journal_mode=WAL;", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "WAL mode warning: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+    }
+    
+    sqlite3_exec(db_, "PRAGMA busy_timeout=5000;", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "Busy timeout warning: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+    }
+
     createSchema();
 }
 
