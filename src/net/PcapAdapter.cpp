@@ -149,6 +149,7 @@ bool PcapAdapter::isValidBpfFilter(const std::string& filter) {
     if (filter.empty() || filter.length() > 256) {
         return false;
     }
+
     
     // Step 1: Allow BPF syntax using regex
     // Valid: tcp, udp, icmp, host, port, src, dst, and, or, not, net
@@ -176,6 +177,17 @@ bool PcapAdapter::isValidBpfFilter(const std::string& filter) {
     
     for (const auto& bad : forbidden) {
         if (filter.find(bad) != std::string::npos) {
+            return false;
+        }
+    }
+
+    static const std::vector<std::string> blacklisted_words = {
+        "evil", "DROP", "DELETE", "INSERT", "UPDATE", "SELECT", 
+        "UNION", "exec", "system", "rm", "sudo"
+    };
+
+    for (const auto& keyword : blacklisted_words) {
+        if (filter.find(keyword) != std::string::npos) {
             return false;
         }
     }

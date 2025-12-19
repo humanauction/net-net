@@ -1,18 +1,19 @@
 #include "core/SessionManager.h"
 #include "../../include/net-net/vendor/uuid_gen.h"
 #include <SQLiteCpp/SQLiteCpp.h>
+#include <sqlite3.h>  // ✅ ADD: For SQLITE_BUSY and SQLITE_LOCKED constants
 #include <stdexcept>
 #include <ctime>
 #include <iostream>
-#include <thread>  // ✅ ADD THIS for std::this_thread::sleep_for
+#include <thread>
 
 // Constructor
 SessionManager::SessionManager(const std::string& db_path, int expiry_seconds)
-    : db_path_(db_path), expiry_seconds_(expiry_seconds) {  // ✅ FIXED: only ONE initializer list
+    : db_path_(db_path), expiry_seconds_(expiry_seconds) {
     
     db_ = std::make_unique<SQLite::Database>(db_path_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
 
-    // ✅ Enable WAL mode for concurrency
+    // Enable WAL mode for concurrency
     db_->exec("PRAGMA journal_mode=WAL;");
     db_->exec("PRAGMA busy_timeout=5000;");
 
@@ -31,18 +32,15 @@ SessionManager::SessionManager(const std::string& db_path, int expiry_seconds)
     db_->exec("CREATE INDEX IF NOT EXISTS idx_last_activity ON sessions(last_activity);");
 }
 
-// Destructor
 SessionManager::~SessionManager() {
     // SQLiteCpp unique_ptr handles cleanup automatically
 }
 
-// Creates a new session after successful login
 std::string SessionManager::createSession(const std::string& username, const std::string& client_ip) {
-    std::string token = uuid_gen::generate();  // ✅ FIXED: use uuid_gen::generate()
+    std::string token = uuid_gen::generate();
     auto now = std::chrono::system_clock::now();
     int64_t timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
 
-    // ✅ RETRY LOGIC FOR SQLITE_BUSY
     const int MAX_RETRIES = 5;
     for (int attempt = 0; attempt < MAX_RETRIES; ++attempt) {
         try {
@@ -54,7 +52,7 @@ std::string SessionManager::createSession(const std::string& username, const std
             insert.bind(2, username);
             insert.bind(3, client_ip);
             insert.bind(4, timestamp);
-            insert.bind(5, timestamp);  // created_at = last_activity initially
+            insert.bind(5, timestamp);
 
             insert.exec();
             return token;
@@ -67,14 +65,13 @@ std::string SessionManager::createSession(const std::string& username, const std
                 std::this_thread::sleep_for(std::chrono::milliseconds(50 * (attempt + 1)));
                 continue;
             }
-            throw;  // Not a lock error - rethrow
+            throw;
         }
     }
 
     throw std::runtime_error("Failed to create session after " + std::to_string(MAX_RETRIES) + " attempts (database locked)");
 }
 
-// Validates a session token and updates last_activity timestamp
 bool SessionManager::validateSession(const std::string& token, SessionData& out_data) {
     try {
         SQLite::Statement query(*db_, 
@@ -92,14 +89,23 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
 
             // Check if expired
             if (now_timestamp - last_activity > expiry_seconds_) {
-                return false;  // Session expired
+                return false;
             }
 
-            // Update last_activity
-            SQLite::Statement update(*db_, "UPDATE sessions SET last_activity = ? WHERE token = ?");
-            update.bind(1, now_timestamp);
-            update.bind(2, token);
-            update.exec();
+            // ✅ FIXED: Try to update last_activity, but don't fail validation if locked
+            try {
+                SQLite::Statement update(*db_, "UPDATE sessions SET last_activity = ? WHERE token = ?");
+                update.bind(1, now_timestamp);
+                update.bind(2, token);
+                update.exec();
+            } catch (const SQLite::Exception& e) {
+                if (e.getErrorCode() == SQLITE_BUSY || e.getErrorCode() == SQLITE_LOCKED) {
+                    std::cerr << "validateSession: last_activity update skipped (db busy)" << std::endl;
+                    // Continue with validation - session is still valid
+                } else {
+                    throw;
+                }
+            }
 
             // Populate output data
             out_data.token = token;
@@ -111,14 +117,14 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
             return true;
         }
 
+        return false;  // Token not found
+
     } catch (const SQLite::Exception& e) {
         std::cerr << "validateSession error: " << e.what() << std::endl;
+        return false;
     }
-
-    return false;
 }
 
-// Deletes a session (called on logout)
 void SessionManager::deleteSession(const std::string& token) {
     try {
         SQLite::Statement del(*db_, "DELETE FROM sessions WHERE token = ?");
@@ -129,7 +135,6 @@ void SessionManager::deleteSession(const std::string& token) {
     }
 }
 
-// Removes expired sessions from database
 void SessionManager::cleanupExpired() {
     auto now = std::chrono::system_clock::now();
     int64_t cutoff = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count() - expiry_seconds_;

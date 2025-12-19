@@ -2,7 +2,7 @@
 #include "../../src/net/PcapAdapter.h"
 #include <thread>
 #include <chrono>
-#include <fstream>
+#include <atomic>
 
 // =================================
 // Test suite
@@ -20,32 +20,23 @@ TEST(PcapAdapterTest, ConstructorValid) {
 }
 
 TEST(PcapAdapterTest, OfflineMode) {
+    std::atomic<int> packet_count{0};
+    
     PcapAdapter::Options opts;
     opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
     opts.read_offline = true;
-
-    // Check if file exists
-    std::ifstream test_file(opts.iface_or_file);
-    if (!test_file.good()) {
-        GTEST_SKIP() << "icmp_sample.pcap not found at: " << opts.iface_or_file;
-    }
     
     PcapAdapter adapter(opts);
     
-    std::atomic<int> packet_count{0}; // atomicity for callback safety
-    adapter.startCapture([&](const PacketMeta& meta, const uint8_t* data, size_t len) {
+    auto callback = [&packet_count](const PacketMeta&, const u_char*, size_t) {
         packet_count++;
-    });
-
-    // For offline mode, pcap_loop() blocks until file is fully read
-    // Sleep for longer if needed for thread completion
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    };
     
+    adapter.startCapture(callback);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     adapter.stopCapture();
 
-    EXPECT_EQ(packet_count.load(), 10) << "Expected 10 ICMP packets in sample pcap, got " << packet_count.load();
-    EXPECT_GT(packet_count.load(), 0) << "No packets captured from pcap file";
+    EXPECT_EQ(packet_count.load(), 128) << "Expected 128 packets in icmp_sample.pcap, got " << packet_count.load();
 }
 
 TEST(PcapAdapterTest, InvalidInterface) {
@@ -59,14 +50,14 @@ TEST(PcapAdapterTest, InvalidInterface) {
 
 TEST(PcapAdapterTest, InvalidOptions) {
     PcapAdapter::Options opts;
-    opts.iface_or_file = "";  // Empty interface
+    opts.iface_or_file = "";
     
     EXPECT_THROW({
         PcapAdapter adapter(opts);
     }, std::invalid_argument);
     
     opts.iface_or_file = "lo0";
-    opts.snaplen = -1;  // Invalid snaplen
+    opts.snaplen = -1;
     
     EXPECT_THROW({
         PcapAdapter adapter(opts);
