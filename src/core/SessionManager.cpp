@@ -20,6 +20,14 @@ SessionManager::SessionManager(const std::string& db_path, int expiry_seconds) :
         std::cerr << "WAL mode warning: " << err_msg << std::endl;
         sqlite3_free(err_msg);
     }
+    
+    // Add busy timeout to prevent "database is locked" errors
+    sqlite3_exec(db_, "PRAGMA busy_timeout=5000;", nullptr, nullptr, &err_msg);
+    if (err_msg) {
+        std::cerr << "Busy timeout warning: " << err_msg << std::endl;
+        sqlite3_free(err_msg);
+    }
+
     // Create sessions table if none exists
     initDatabase();
 }
@@ -33,12 +41,6 @@ SessionManager::~SessionManager() {
 
 // Creates the sessions table and index for efficient expired session cleanup
 void SessionManager::initDatabase() {
-    // SQL to create sessions table (idempotent - only creates if not exists)
-            // token: UUID v4 session identifier (primary key)
-            // username: User who owns this session
-            // created_at: Unix timestamp when session was created
-            // last_activity: Unix timestamp of last validated request (updated on each API call)
-            // ip_address: Client IP for forensic logging
     const char* sql = R"(
         CREATE TABLE IF NOT EXISTS sessions (
             token TEXT PRIMARY KEY,
@@ -55,6 +57,29 @@ void SessionManager::initDatabase() {
         std::string error = "Failed to create sessions table: " + std::string(err_msg);
         sqlite3_free(err_msg);
         throw std::runtime_error(error);
+    }
+
+    // Check column count by actually counting rows from PRAGMA
+    const char* check_sql = "PRAGMA table_info(sessions);";
+    sqlite3_stmt* check_stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db_, check_sql, -1, &check_stmt, nullptr) == SQLITE_OK) {
+        int column_count = 0;
+        while (sqlite3_step(check_stmt) == SQLITE_ROW) {
+            column_count++;  // Count each row = each column
+        }
+        sqlite3_finalize(check_stmt);
+
+        // If column count is not 5, drop and recreate
+        if (column_count != 5) {
+            std::cerr << "Schema mismatch detected (" << column_count << " columns, expected 5). Recreating table." << std::endl;
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS sessions;", nullptr, nullptr, &err_msg);
+            sqlite3_exec(db_, sql, nullptr, nullptr, &err_msg);
+            if (err_msg) {
+                std::cerr << "Error recreating table: " << err_msg << std::endl;
+                sqlite3_free(err_msg);
+            }
+        }
     }
 }
 

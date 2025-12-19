@@ -267,6 +267,11 @@ jobs:
       run: |
         envsubst < examples/sample-config.yaml > examples/sample-config.ci.yaml
 
+    - name: Clean stale session database
+      run: |
+        rm -f examples/sample-config.ci.yaml.sessions 2>/dev/null || true
+        rm -f /tmp/*.db* 2>/dev/null || true
+
     - name: Start netnet-daemon
       run: |
         sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml &
