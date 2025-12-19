@@ -57,18 +57,6 @@ jobs:
         cd build
         make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
 
-    - name: Run C++ unit tests
-      run: |
-        cd build
-        for test in test_parser test_pcap_adapter test_connection_tracker \
-                    test_stats_aggregator test_session_manager \
-                    test_stats_aggregator_integration test_metrics_endpoint \
-                    test_parser_extended \
-                    test_pcap_adapter_extended \
-                    test_stats_persistence; do
-          if [ -f ./$test ]; then ./$test || true; fi
-        done
-
     - name: Copy test fixtures
       run: |
         mkdir -p build/tests
@@ -77,14 +65,7 @@ jobs:
     - name: Run C++ tests
       run: |
         cd build
-        failed=0
-        for test in test_parser test_pcap_adapter test_connection_tracker test_stats_aggregator test_session_manager test_stats_aggregator_integration test_metrics_endpoint test_stats_persistence; do
-          if [ -f ./$test ]; then
-            echo "Running $test..."
-            ./$test || failed=1
-          fi
-        done
-        exit $failed
+        ctest --output-on-failure --verbose
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -139,7 +120,7 @@ jobs:
       if: failure()
       run: |
         echo "==== netnet-daemon-log ===="
-        cat tmp/netnet-daemon.log || echo "No log found"
+        cat /tmp/netnet-daemon.log || echo "No log found"
 
     - name: Run Python integration tests
       run: |
@@ -205,6 +186,10 @@ jobs:
           cmake build-essential libpcap-dev libssl-dev \
           libsqlite3-dev libyaml-cpp-dev nlohmann-json3-dev \
           libgtest-dev pkg-config gcovr
+        cd /tmp
+        git clone https://github.com/yhirose/cpp-httplib.git
+        cd cpp-httplib
+        sudo cp httplib.h /usr/local/include/
 
     - name: Configure CMake with coverage
       run: |

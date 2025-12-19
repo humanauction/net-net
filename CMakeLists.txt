@@ -10,7 +10,7 @@ project(net-net CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Genereate coverage data
+# Generate coverage data
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -fprofile-arcs -ftest-coverage")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
@@ -22,12 +22,25 @@ set(ENV{PKG_CONFIG_PATH} "/usr/local/opt/libpcap/lib/pkgconfig:$ENV{PKG_CONFIG_P
 # pkg-config and modules
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCAP REQUIRED libpcap)
-pkg_check_modules(SQLITE3 REQUIRED sqlite3)
-find_package(SQLiteCpp REQUIRED)
+
 # Find OpenSSL, yaml-cpp, nlohmann_json early
 find_package(OpenSSL REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(nlohmann_json REQUIRED)
+include(FetchContent)
+
+FetchContent_Declare(
+    SQLiteCpp
+    GIT_REPOSITORY https://github.com/SRombauts/SQLiteCpp.git
+    GIT_TAG        3.3.1  # Latest stable version
+)
+
+set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
+set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
+set(SQLITECPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SQLITECPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(SQLiteCpp)
 
 # Find or add cpp-httplib
 find_path(HTTPLIB_INCLUDE_DIR httplib.h
@@ -65,15 +78,12 @@ target_include_directories(netnet-core
         ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
     PRIVATE
         ${PCAP_INCLUDE_DIRS}
-        ${SQLITE3_INCLUDE_DIRS}
 )
 
 target_link_libraries(netnet-core
     PRIVATE
         ${PCAP_LIBRARIES}
-        ${SQLITE3_LIBRARIES}
         SQLiteCpp
-        sqlite3
         OpenSSL::SSL
         OpenSSL::Crypto        
         pthread
@@ -90,14 +100,12 @@ target_include_directories(netnet
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/net
         ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
-        ${SQLITE3_INCLUDE_DIRS}
 )
 
 target_link_libraries(netnet
     PRIVATE 
         netnet-core
         yaml-cpp
-        ${SQLITE3_LIBRARIES}
         ${EXTRA_LIBS}
 )
 
@@ -125,6 +133,7 @@ target_link_libraries(test_runner
         netnet-core GTest::gtest GTest::gtest_main pthread
         ${EXTRA_LIBS}
 )
+add_test(NAME test_runner COMMAND test_runner)
 
 # TEST Parser
 add_executable(test_parser
@@ -141,6 +150,7 @@ target_link_libraries(test_parser
         GTest::gtest GTest::gtest_main
         ${EXTRA_LIBS}
 )
+add_test(NAME test_parser COMMAND test_parser)
 
 # TEST Connection Tracker
 add_executable(test_connection_tracker
@@ -158,6 +168,7 @@ target_link_libraries(test_connection_tracker
         GTest::gtest GTest::gtest_main pthread
         ${EXTRA_LIBS}
 )
+add_test(NAME test_connection_tracker COMMAND test_connection_tracker)
 
 # TEST Stats Aggregator
 add_executable(test_stats_aggregator
@@ -175,6 +186,7 @@ target_link_libraries(test_stats_aggregator
     PRIVATE GTest::gtest GTest::gtest_main pthread
     ${EXTRA_LIBS}
 )
+add_test(NAME test_stats_aggregator COMMAND test_stats_aggregator)
 
 # TEST Session Management
 add_executable(test_session_manager
@@ -195,12 +207,11 @@ target_link_libraries(test_session_manager
         GTest::gtest_main 
         pthread
         SQLiteCpp
-        sqlite3
-        ${SQLITE3_LIBRARIES}
         OpenSSL::SSL
         OpenSSL::Crypto
         ${EXTRA_LIBS}
 )
+add_test(NAME test_session_manager COMMAND test_session_manager)
 
 # TEST Aggregator Integration
 add_executable(test_stats_aggregator_integration
@@ -224,6 +235,7 @@ target_link_libraries(test_stats_aggregator_integration
         ${PCAP_LIBRARIES}
         ${EXTRA_LIBS}
 )
+add_test(NAME test_stats_aggregator_integration COMMAND test_stats_aggregator_integration)
 
 # TEST Stats Persistence
 add_executable(test_stats_persistence
@@ -258,7 +270,6 @@ target_include_directories(netnet-daemon-lib
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
         ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
-        ${SQLITE3_INCLUDE_DIRS}
 )
 
 target_link_libraries(netnet-daemon-lib
@@ -267,7 +278,6 @@ target_link_libraries(netnet-daemon-lib
         yaml-cpp
         nlohmann_json::nlohmann_json
         pthread
-        ${SQLITE3_LIBRARIES}
         OpenSSL::SSL
         OpenSSL::Crypto
         ${EXTRA_LIBS}
@@ -322,7 +332,6 @@ target_include_directories(test_netmon_daemon
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
         ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
-        ${SQLITE3_INCLUDE_DIRS}
 )
 
 target_link_libraries(test_netmon_daemon
