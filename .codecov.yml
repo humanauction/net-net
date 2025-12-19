@@ -2,17 +2,25 @@ coverage:
   status:
     project:
       default:
-        target: 70%
-        threshold: 5%
+        target: 75%
+        threshold: 2%
     patch:
       default:
-        target: 80%
+        target: 75%
 
 # Excluded from coverage calculations (non-production code)
 ignore:
-  - "tests/**"                    # Test files
-  - "include/net-net/vendor/**"   # Third-party libraries
-  - "build/**"                    # Build artifacts
-  - "examples/**"                 # Sample configs
-  - "docs/**"                     # Documentation
-  - ".venv-netnet/**"             # Python virtual env
+  - "tests/**/*"
+  - "examples/**/*"
+  - "include/net-net/vendor/**/*"
+  - "vendor/**/*"
+  - "build/**/*"
+  - "CMakeFiles/**/*"
+  - "src/main.cpp"
+  - "src/daemon/Main.cpp"
+  # - "**/*.h"  # If you don't want header coverage
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false

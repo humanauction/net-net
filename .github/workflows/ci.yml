@@ -295,7 +295,9 @@ jobs:
     - name: Upload C++ coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         files: ./build/coverage.xml
         flags: cpp
         name: cpp-coverage
-        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+        verbose: true
