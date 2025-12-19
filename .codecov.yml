@@ -18,7 +18,7 @@ ignore:
   - "CMakeFiles/**/*"
   - "src/main.cpp"
   - "src/daemon/Main.cpp"
-  # - "**/*.h"  # If you don't want header coverage
+  - "**/*.h"  # If you don't want header coverage
 
 comment:
   layout: "reach,diff,flags,tree"
