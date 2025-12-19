@@ -23,12 +23,11 @@ set(ENV{PKG_CONFIG_PATH} "/usr/local/opt/libpcap/lib/pkgconfig:$ENV{PKG_CONFIG_P
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCAP REQUIRED libpcap)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
-
+find_package(SQLiteCpp REQUIRED)
 # Find OpenSSL, yaml-cpp, nlohmann_json early
 find_package(OpenSSL REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(nlohmann_json REQUIRED)
-find_package(SQLiteCpp REQUIRED)
 
 # Find or add cpp-httplib
 find_path(HTTPLIB_INCLUDE_DIR httplib.h
@@ -74,6 +73,7 @@ target_link_libraries(netnet-core
         ${PCAP_LIBRARIES}
         ${SQLITE3_LIBRARIES}
         SQLiteCpp
+        sqlite3
         OpenSSL::SSL
         OpenSSL::Crypto        
         pthread
@@ -194,6 +194,8 @@ target_link_libraries(test_session_manager
         GTest::gtest 
         GTest::gtest_main 
         pthread
+        SQLiteCpp
+        sqlite3
         ${SQLITE3_LIBRARIES}
         OpenSSL::SSL
         OpenSSL::Crypto
