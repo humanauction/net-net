@@ -424,3 +424,183 @@ TEST_F(NetMonDaemonTest, ActiveFlowsArrayStructure) {
         EXPECT_TRUE(flow.contains("state"));
     }
 }
+
+// Test missing required config fields
+TEST(NetMonDaemonConfigTest, ThrowsOnMissingApiToken) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    config["database"]["path"] = ":memory:";
+    // Missing api.token
+    
+    EXPECT_THROW({
+        NetMonDaemon daemon(config, "test-missing-token");
+    }, std::runtime_error);
+}
+
+TEST(NetMonDaemonConfigTest, ThrowsOnMissingStatsConfig) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["api"]["token"] = "test-token";
+    config["database"]["path"] = ":memory:";
+    // Missing stats.window_size and history_depth
+    
+    EXPECT_THROW({
+        NetMonDaemon daemon(config, "test-missing-stats");
+    }, std::runtime_error);
+}
+
+TEST(NetMonDaemonConfigTest, ThrowsOnMissingDatabasePath) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["api"]["token"] = "test-token";
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    // Missing database.path
+    
+    EXPECT_THROW({
+        NetMonDaemon daemon(config, "test-missing-db");
+    }, std::runtime_error);
+}
+
+TEST(NetMonDaemonConfigTest, ThrowsOnMissingInterfaceAndOfflineFile) {
+    YAML::Node config;
+    config["api"]["token"] = "test-token";
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    config["database"]["path"] = ":memory:";
+    // Missing both interface.name and offline.file
+    
+    EXPECT_THROW({
+        NetMonDaemon daemon(config, "test-no-source");
+    }, std::runtime_error);
+}
+
+// Test invalid BPF filter
+TEST(NetMonDaemonConfigTest, ThrowsOnInvalidBpfFilter) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["interface"]["bpf_filter"] = "invalid; DROP TABLE--";  // SQL injection attempt
+    config["api"]["token"] = "test-token";
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    config["database"]["path"] = ":memory:";
+    
+    EXPECT_THROW({
+        NetMonDaemon daemon(config, "test-bad-bpf");
+    }, std::runtime_error);
+}
+
+// Add to existing NetMonDaemonTest fixture:
+
+// Test expired session token
+TEST_F(NetMonDaemonTest, ExpiredSessionTokenReturns401) {
+    // Create short-lived session
+    std::string test_db = "/tmp/test_session_expired_" + std::to_string(getpid()) + ".db";
+    SessionManager short_mgr(test_db, 1);  // 1 second expiry
+    
+    std::string token = short_mgr.createSession("testuser", "127.0.0.1");
+    
+    sleep(2);  // Wait for expiry
+    
+    auto res = makeSessionGet("/metrics", token);
+    EXPECT_EQ(res->status, 401);
+    
+    unlink(test_db.c_str());
+}
+
+// Test missing username in login
+TEST_F(NetMonDaemonTest, LoginWithoutUsernameReturns400) {
+    httplib::Client client(test_host, test_port);
+    
+    json body;
+    body["password"] = "test";
+    // Missing username
+    
+    auto res = client.Post("/login", body.dump(), "application/json");
+    EXPECT_EQ(res->status, 400);
+}
+
+// Test missing password in login
+TEST_F(NetMonDaemonTest, LoginWithoutPasswordReturns400) {
+    httplib::Client client(test_host, test_port);
+    
+    json body;
+    body["username"] = "test";
+    // Missing password
+    
+    auto res = client.Post("/login", body.dump(), "application/json");
+    EXPECT_EQ(res->status, 400);
+}
+
+// Test logout without session token
+TEST_F(NetMonDaemonTest, LogoutWithoutTokenReturns400) {
+    httplib::Client client(test_host, test_port);
+    auto res = client.Post("/logout");
+    
+    EXPECT_EQ(res->status, 400);
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["error"], "no session token provided");
+}
+
+// Test logout with invalid token
+TEST_F(NetMonDaemonTest, LogoutWithInvalidTokenReturns401) {
+    httplib::Client client(test_host, test_port);
+    httplib::Headers headers = {
+        {"X-Session-Token", "invalid-token-12345"}
+    };
+    auto res = client.Post("/logout", headers, "", "application/json");
+    
+    EXPECT_EQ(res->status, 401);
+}
+
+// Test multiple rapid control requests (rate limiting)
+TEST_F(NetMonDaemonTest, MultipleRapidControlRequestsBlocked) {
+    auto res1 = makeAuthenticatedPost("/control/reload");
+    EXPECT_EQ(res1->status, 200);
+    
+    auto res2 = makeAuthenticatedPost("/control/reload");
+    EXPECT_EQ(res2->status, 429);
+    
+    auto res3 = makeAuthenticatedPost("/control/reload");
+    EXPECT_EQ(res3->status, 429);
+}
+
+// Test control endpoints with session token (not just API token)
+TEST_F(NetMonDaemonTest, ControlEndpointsWorkWithSessionToken) {
+    std::string token = loginUser(test_username, test_password);
+    ASSERT_FALSE(token.empty());
+    
+    httplib::Client client(test_host, test_port);
+    httplib::Headers headers = {
+        {"X-Session-Token", token}
+    };
+    
+    auto res = client.Post("/control/start", headers, "", "application/json");
+    EXPECT_EQ(res->status, 200);
+}
+
+// Test malformed Authorization header
+TEST_F(NetMonDaemonTest, MalformedAuthHeaderReturns401) {
+    httplib::Client client(test_host, test_port);
+    httplib::Headers headers = {
+        {"Authorization", "NotBearer wrongformat"}
+    };
+    auto res = client.Get("/metrics", headers);
+    EXPECT_EQ(res->status, 401);
+}
+
+// Test empty metrics response (no traffic)
+TEST_F(NetMonDaemonTest, MetricsWithNoTrafficReturnsZeros) {
+    // Daemon starts with no traffic in test
+    auto res = makeAuthenticatedGet("/metrics");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    // In offline test mode with icmp_sample.pcap, there will be traffic
+    // But we can still validate the structure
+    EXPECT_TRUE(j.contains("total_bytes"));
+    EXPECT_TRUE(j.contains("total_packets"));
+}

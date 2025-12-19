@@ -19,13 +19,22 @@
 #include "../../include/net-net/vendor/bcrypt.h"
 
 
+
 // ===================================================================
 // CONSTRUCTORS
 // ===================================================================
 
+// In-memory constructor (testing use)
+NetMonDaemon::NetMonDaemon(const YAML::Node& config, const std::string& config_name)
+    : config_path_(""), config_name_(config_name), running_(false)  // ✅ INITIALIZE config_name_
+{
+    log("info", "Loading configuration from memory: " + config_name);
+    initializeFromConfig(config);
+}
+
 // File-based constructor (production use)
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
-    : config_path_(config_path), running_(false)
+    : config_path_(config_path), config_name_(""), running_(false)  // ✅ INITIALIZE config_name_ (empty for file-based)
 {
     log("info", "Loading configuration from: " + config_path);
     
@@ -36,15 +45,6 @@ NetMonDaemon::NetMonDaemon(const std::string& config_path)
         throw std::runtime_error("Failed to load config file: " + std::string(e.what()));
     }
     
-    // Use common initialization
-    initializeFromConfig(config);
-}
-
-// In-memory constructor (testing use)
-NetMonDaemon::NetMonDaemon(const YAML::Node& config, const std::string& config_name)
-    : config_path_(config_name), running_(false)
-{
-    log("info", "Loading configuration from memory: " + config_name);
     initializeFromConfig(config);
 }
 
@@ -433,25 +433,30 @@ void NetMonDaemon::setupApiRoutes() {
 
     // POST /control/reload - Reload config
     svr_.Post("/control/reload", [this](const httplib::Request& req, httplib::Response& res) {
-        if (!isAuthorized(req)) {
-            logAuthFailure(req);
-            res.status = 401;
-            res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+        // Check auth + rate limit
+        if (!checkRateLimit(req, res, "/control/reload")) {
+            return;  // Response already set by checkRateLimit()
+        }
+
+        // Check if using in-memory config
+        if (config_path_.empty()) {
+            log("warn", "RELOAD SKIPPED - Daemon using in-memory config: " + 
+                (config_name_.empty() ? "unknown" : config_name_));
+
+            nlohmann::json j;
+            j["status"] = "reloaded";
+            j["message"] = "config reload skipped (in-memory config)";
+            res.set_content(j.dump(), "application/json");
             return;
         }
+
+        // Reload from file
         try {
             std::lock_guard<std::shared_mutex> lock(reload_mutex);
-
-            if (config_path_.find(".yaml") != std::string::npos) {
-                YAML::Node config = YAML::LoadFile(config_path_);
-                initializeFromConfig(config);
-                log("info", "SUCCESS, config reloaded from: " + config_path_);
-                
-            } else {
-                log("warn", "RELOAD SKIPPED - Daemon using in-memory config: " + config_path_);
-            }
+            YAML::Node config = YAML::LoadFile(config_path_);
+            initializeFromConfig(config);
+            log("info", "SUCCESS, config reloaded from: " + config_path_);
             res.set_content("{\"status\":\"reloaded\"}", "application/json");
-
         } catch (const std::exception& ex) {
             log("error", "Reload failed: " + std::string(ex.what()));
             res.status = 500;
@@ -495,6 +500,27 @@ void NetMonDaemon::stopServer() {
 // HELPER METHODS
 // ===================================================================
 
+bool NetMonDaemon::checkRateLimit(const httplib::Request& req, httplib::Response& res, const std::string& endpoint) {
+    // Check authorization first
+    if (!isAuthorized(req)) {
+        logAuthFailure(req);
+        res.status = 401;
+        res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+        return false;
+    }
+
+    // Then check rate limit
+    auto now = std::chrono::steady_clock::now();
+    auto& last = last_control_request_[endpoint];
+    if (now - last < control_rate_limit_) {
+        res.status = 429;
+        res.set_content("{\"error\":\"rate limit exceeded\"}", "application/json");
+        return false;
+    }
+    last = now;
+    return true;
+}
+
 void NetMonDaemon::stop() {
     if (!running_.load()) return;
     
@@ -506,29 +532,6 @@ void NetMonDaemon::stop() {
         pcap_->stopCapture();
     }
 
-}
-
-bool NetMonDaemon::isAuthorized(const httplib::Request& req) {
-    // Check for API token (Bearer or query param)
-    auto auth = req.get_header_value("Authorization");
-    std::string prefix = "Bearer ";
-    if (auth.rfind(prefix, 0) == 0 && auth.substr(prefix.size()) == api_token_) {
-        return true;
-    }
-    if (req.has_param("token") && req.get_param_value("token") == api_token_) {
-        return true;
-    }
-
-    // Check for session token
-    auto session_token = req.get_header_value("X-Session-Token");
-    if (!session_token.empty()) {
-        SessionData session_data;
-        if (session_manager_->validateSession(session_token, session_data)) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 void NetMonDaemon::logAuthFailure(const httplib::Request& req) const {

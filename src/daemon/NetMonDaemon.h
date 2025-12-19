@@ -39,6 +39,7 @@ private:
     bool isAuthorized(const httplib::Request& req);
     void logAuthFailure(const httplib::Request& req) const;
     bool shouldLog(const std::string& level) const;
+    bool checkRateLimit(const httplib::Request& req, httplib::Response& res, const std::string& endpoint);
     
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_control_request_;
     const std::chrono::seconds control_rate_limit_{2};
@@ -47,6 +48,7 @@ private:
     std::atomic<bool> running_{false};
     static std::atomic<bool> running_signal_;
     std::string config_path_;
+    std::string config_name_;
     std::thread api_thread_;
     std::string api_token_;
     std::string api_host_;
