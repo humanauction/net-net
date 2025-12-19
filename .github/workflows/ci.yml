@@ -226,19 +226,24 @@ jobs:
         ctest --output-on-failure --verbose
         cd ..
 
+    - name: Remove vendor coverage files
+      run: |
+        find build -path "*/vendor/*" -name "*.gcda" -delete 2>/dev/null || true
+
     - name: Generate C++ coverage report
       run: |
-        gcovr --root . \
-          --object-directory build \
-          --filter '^src/' \
-          --filter '^include/net-net/' \
-          --exclude '^include/net-net/vendor/' \
-          --exclude '^tests/' \
-          --exclude '^examples/' \
-          --exclude '^src/main\.cpp$' \
-          --exclude '^src/daemon/Main\.cpp$' \
-          --exclude '^CMake/' \
-          --xml-pretty --xml build/coverage.xml \
+        cd build
+        gcovr --root .. \
+          --exclude '.*tests/.*' \
+          --exclude '.*vendor/.*' \
+          --exclude '.*googletest/.*' \
+          --exclude '.*examples/.*' \
+          --exclude '.*build/.*' \
+          --exclude '.*CMakeFiles/.*' \
+          --exclude '.*/src/main\.cpp$$' \
+          --exclude '.*/src/daemon/Main\.cpp$$' \
+          --gcov-ignore-errors=no_working_dir_found \
+          --xml-pretty --xml coverage.xml \
           --print-summary \
           --sort-uncovered
 
