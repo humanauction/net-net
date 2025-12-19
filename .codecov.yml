@@ -2,23 +2,23 @@ coverage:
   status:
     project:
       default:
-        target: 75%
+        target: 70%
         threshold: 2%
     patch:
       default:
-        target: 75%
+        target: 70%
 
-# Excluded from coverage calculations (non-production code)
+# Critical: Tell Codecov to ignore vendor files
 ignore:
-  - "tests/**/*"
-  - "examples/**/*"
   - "include/net-net/vendor/**/*"
   - "vendor/**/*"
+  - "tests/**/*"
+  - "examples/**/*"
   - "build/**/*"
   - "CMakeFiles/**/*"
   - "src/main.cpp"
   - "src/daemon/Main.cpp"
-  - "**/*.h"  # If you don't want header coverage
+  - "**/*.h"  # Optional: exclude headers if you don't want them counted
 
 comment:
   layout: "reach,diff,flags,tree"

@@ -229,6 +229,8 @@ jobs:
     - name: Remove vendor coverage files
       run: |
         find build -path "*/vendor/*" -name "*.gcda" -delete 2>/dev/null || true
+        find include -path "*/vendor/*" -name "*.gcda" -delete 2>/dev/null || true
+        find . -path "*/vendor/*" -name "*.gcno" -delete 2>/dev/null || true
 
     - name: Generate C++ coverage report
       run: |
