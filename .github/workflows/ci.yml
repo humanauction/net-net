@@ -242,7 +242,6 @@ jobs:
           --exclude '.*CMakeFiles/.*' \
           --exclude '.*/src/main\.cpp$$' \
           --exclude '.*/src/daemon/Main\.cpp$$' \
-          --gcov-ignore-errors=no_working_dir_found,source_not_found \
           --xml-pretty --xml coverage.xml \
           --print-summary \
           --sort-uncovered
