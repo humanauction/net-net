@@ -500,6 +500,34 @@ void NetMonDaemon::stopServer() {
 // HELPER METHODS
 // ===================================================================
 
+bool NetMonDaemon::isAuthorized(const httplib::Request& req) {
+    // Check for API token in Authorization header (Bearer token)
+    auto auth_header = req.get_header_value("Authorization");
+    if (!auth_header.empty() && auth_header.find("Bearer ") == 0) {
+        std::string token = auth_header.substr(7); // Remove "Bearer "
+        if (token == api_token_) {
+            return true;
+        }
+    }
+
+    // Check for API token in query parameter (?token=...)
+    auto token_param = req.get_param_value("token");
+    if (!token_param.empty() && token_param == api_token_) {
+        return true;
+    }
+
+    // Check for session token in X-Session-Token header
+    auto session_token = req.get_header_value("X-Session-Token");
+    if (!session_token.empty()) {
+        SessionData session_data;
+        if (session_manager_->validateSession(session_token, session_data)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool NetMonDaemon::checkRateLimit(const httplib::Request& req, httplib::Response& res, const std::string& endpoint) {
     // Check authorization first
     if (!isAuthorized(req)) {
