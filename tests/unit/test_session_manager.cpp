@@ -9,128 +9,110 @@
 #include <string>
 #include <sys/stat.h>
 #include <cstdint>
-#include <stdexcept>
-#include <memory>
 #include <filesystem>
-
 namespace fs = std::filesystem;
 
-namespace {
-
-// Scope guard (keep ABOVE any function that uses ScopeExit)
-template <class F>
-class ScopeExit {
-public:
-    explicit ScopeExit(F f) : f_(std::move(f)), active_(true) {}
-    ~ScopeExit() { if (active_) f_(); }
-    ScopeExit(const ScopeExit&) = delete;
-    ScopeExit& operator=(const ScopeExit&) = delete;
-    void dismiss() { active_ = false; }
-private:
-    F f_;
-    bool active_;
+// Helper: RAII cleanup guard
+struct ScopeExit {
+    std::function<void()> fn;
+    bool dismissed = false;
+    ScopeExit(std::function<void()> f) : fn(f) {}
+    ~ScopeExit() { if (!dismissed && fn) fn(); }
+    void dismiss() { dismissed = true; }
 };
 
-// Seconds since epoch (matches typical SQLite INTEGER seconds usage)
+// Helper: get current Unix timestamp
 static int64_t now_sec() {
-    const auto now = std::chrono::system_clock::now();
+    auto now = std::chrono::system_clock::now();
     return std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
 }
 
-// Helper to set last_activity timestamp directly in DB for a given token
-static void set_last_activity(const std::string& db_path, const std::string& token, int64_t ts) {
-    sqlite3* db = nullptr;
-    ASSERT_EQ(sqlite3_open(db_path.c_str(), &db), SQLITE_OK);
-    ScopeExit cleanup_db([&] {
-        if (db) sqlite3_close(db);
-        db = nullptr;
-    });
-
-    const char* sql = "UPDATE sessions SET last_activity = ? WHERE token = ?";
-    sqlite3_stmt* stmt = nullptr;
-    ASSERT_EQ(sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr), SQLITE_OK);
-    ScopeExit cleanup_stmt([&] {
-        if (stmt) sqlite3_finalize(stmt);
-        stmt = nullptr;
-    });
-
-    ASSERT_EQ(sqlite3_bind_int64(stmt, 1, ts), SQLITE_OK);
-    ASSERT_EQ(sqlite3_bind_text(stmt, 2, token.c_str(), -1, SQLITE_TRANSIENT), SQLITE_OK);
-    ASSERT_EQ(sqlite3_step(stmt), SQLITE_DONE);
-}
-
+// Helper: execute raw SQL on a sqlite3* handle
 static void exec_sql_raw(sqlite3* db, const char* sql) {
-    char* err = nullptr;
-    const int rc = sqlite3_exec(db, sql, nullptr, nullptr, &err);
+    char* err_msg = nullptr;
+    int rc = sqlite3_exec(db, sql, nullptr, nullptr, &err_msg);
     if (rc != SQLITE_OK) {
-        std::string msg = err ? err : "";
-        sqlite3_free(err);
-        FAIL() << "sqlite3_exec failed rc=" << rc << " err=" << msg << " sql=" << sql;
+        std::string error = err_msg ? err_msg : "unknown error";
+        sqlite3_free(err_msg);
+        throw std::runtime_error("SQL error: " + error);
     }
 }
 
-static fs::path unique_db_path(const std::string& prefix) {
-    const auto now_ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-    return fs::temp_directory_path() / (prefix + "-" + std::to_string(getpid()) + "-" + std::to_string(now_ns) + ".db");
+// Helper: manually set last_activity timestamp in DB
+static void set_last_activity(const std::string& db_path, const std::string& token, int64_t ts) {
+    sqlite3* db = nullptr;
+    if (sqlite3_open(db_path.c_str(), &db) != SQLITE_OK) {
+        throw std::runtime_error("Failed to open DB for set_last_activity");
+    }
+    ScopeExit cleanup([&] { sqlite3_close(db); });
+
+    std::string sql = "UPDATE sessions SET last_activity = " + std::to_string(ts) +
+                      " WHERE token = '" + token + "';";
+    exec_sql_raw(db, sql.c_str());
 }
 
-// Test fixtures for SessionManager tests
+// ✅ Test fixture with test_db_path_ member
 class SessionManagerTest : public ::testing::Test {
 protected:
-    std::string test_db_path_;
     std::unique_ptr<SessionManager> manager_;
+    std::string test_db_path_;  // ✅ ADD THIS
 
     void SetUp() override {
-        test_db_path_ = unique_db_path("test_session").string();
-        unlink(test_db_path_.c_str());
+        test_db_path_ = "test_sessions_" + std::to_string(getpid()) + ".db";
+        
+        // Remove if exists
+        if (fs::exists(test_db_path_)) {
+            fs::remove(test_db_path_);
+        }
+        
         manager_ = std::make_unique<SessionManager>(test_db_path_, 3600);
     }
 
     void TearDown() override {
         manager_.reset();
-        unlink(test_db_path_.c_str());
+        
+        // Cleanup test DB files
+        if (fs::exists(test_db_path_)) {
+            fs::remove(test_db_path_);
+        }
+        
+        std::string wal_file = test_db_path_ + "-wal";
+        std::string shm_file = test_db_path_ + "-shm";
+        
+        if (fs::exists(wal_file)) fs::remove(wal_file);
+        if (fs::exists(shm_file)) fs::remove(shm_file);
     }
 };
+
+// Standalone tests that DON'T use the fixture
+class SessionManagerStandaloneTest : public ::testing::Test {};
+
+TEST_F(SessionManagerStandaloneTest, ConstructorThrowsWhenDbPathCannotBeOpened) {
+    EXPECT_THROW({
+        SessionManager mgr("/dev/null/impossible.db", 3600);
+    }, SQLite::Exception);
 }
 
-// =====================================
-//  Test Cases
-// =====================================
-
-// TEST Constructor throws when DB path cannot be opened
-TEST(SessionManagerStandaloneTest, ConstructorThrowsWhenDbPathCannotBeOpened) {
-    const std::string bad_dir = "/tmp/netnet-no-such-dir-" + std::to_string(getpid());
-    const std::string db_path = bad_dir + "/sessions.db";
-
-    // Directory does not exist => sqlite3_open should fail => constructor throws.
-    EXPECT_THROW({ SessionManager sm(db_path, 10); }, std::runtime_error);
-}
-
-
-// TEST Constructor throws when DB is read-only
-TEST(SessionManagerStandaloneTest, ConstructorThrowsWhenDbIsReadOnly) {
-    const std::string db_path = "/tmp/netnet-readonly-" + std::to_string(getpid()) + ".db";
-    unlink(db_path.c_str());
-
-    // Create an empty file, then make it read-only.
+TEST_F(SessionManagerStandaloneTest, ConstructorThrowsWhenDbIsReadOnly) {
+    const std::string readonly_db = "readonly_test.db";
+    
     {
-        std::FILE* f = std::fopen(db_path.c_str(), "w");
-        ASSERT_NE(f, nullptr);
-        std::fclose(f);
+        SessionManager temp(readonly_db, 3600);
     }
-    ASSERT_EQ(chmod(db_path.c_str(), 0444), 0);
-
-    // initDatabase() will attempt CREATE TABLE and should fail on read-only db => throws.
-    EXPECT_THROW({ SessionManager sm(db_path, 10); }, std::runtime_error);
-
-    // Cleanup
-    ASSERT_EQ(chmod(db_path.c_str(), 0644), 0);
-    unlink(db_path.c_str());
+    
+    chmod(readonly_db.c_str(), 0444);
+    
+    EXPECT_THROW({
+        SessionManager mgr(readonly_db, 3600);
+    }, SQLite::Exception);
+    
+    chmod(readonly_db.c_str(), 0644);
+    fs::remove(readonly_db);
+    fs::remove(readonly_db + "-wal");
+    fs::remove(readonly_db + "-shm");
 }
 
-// TEST validateSession() returns true even if last_activity UPDATE is blocked
+// ✅ Now this test can access test_db_path_
 TEST_F(SessionManagerTest, ValidateSessionReturnsTrueEvenIfLastActivityUpdateIsBusy) {
     const std::string token = manager_->createSession("locktest", "127.0.0.1");
 
@@ -141,10 +123,10 @@ TEST_F(SessionManagerTest, ValidateSessionReturnsTrueEvenIfLastActivityUpdateIsB
         std::chrono::time_point_cast<std::chrono::seconds>(
             std::chrono::system_clock::from_time_t(forced_old_ts));
 
-    // Hold a write lock in a separate connection so the UPDATE in validateSession() fails.
     {
         sqlite3* db2 = nullptr;
         ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db2), SQLITE_OK);
+        sqlite3_busy_timeout(db2, 0);
 
         ScopeExit cleanup([&] {
             if (!db2) return;
@@ -153,7 +135,10 @@ TEST_F(SessionManagerTest, ValidateSessionReturnsTrueEvenIfLastActivityUpdateIsB
             db2 = nullptr;
         });
 
-        exec_sql_raw(db2, "BEGIN IMMEDIATE;");
+        exec_sql_raw(db2, "BEGIN EXCLUSIVE;");
+        
+        std::string lock_sql = "UPDATE sessions SET last_activity = last_activity WHERE token = '" + token + "';";
+        exec_sql_raw(db2, lock_sql.c_str());
 
         SessionData out{};
         EXPECT_TRUE(manager_->validateSession(token, out));
@@ -161,22 +146,20 @@ TEST_F(SessionManagerTest, ValidateSessionReturnsTrueEvenIfLastActivityUpdateIsB
         const auto out_last_tp =
             std::chrono::time_point_cast<std::chrono::seconds>(out.last_activity);
 
-        // last_activity should NOT change because the UPDATE is blocked.
         EXPECT_EQ(out_last_tp, forced_old_tp);
 
-        // Explicitly release the lock *before* leaving the scope (deterministic).
         ASSERT_EQ(sqlite3_exec(db2, "ROLLBACK;", nullptr, nullptr, nullptr), SQLITE_OK);
         ASSERT_EQ(sqlite3_close(db2), SQLITE_OK);
         db2 = nullptr;
         cleanup.dismiss();
     }
 
-    // Now that the lock is gone, validateSession() should be able to update last_activity.
     SessionData out2{};
     ASSERT_TRUE(manager_->validateSession(token, out2));
     const auto out2_last_tp =
         std::chrono::time_point_cast<std::chrono::seconds>(out2.last_activity);
 
+    // ✅ FIX: Compare time_point to time_point, NOT to int64_t
     EXPECT_GT(out2_last_tp, forced_old_tp);
 }
 
@@ -308,7 +291,7 @@ TEST_F(SessionManagerTest, ValidateSessionRejectsExpired) {
 
 // TEST validateSession() accepts sessions exactly at expiry boundary
 TEST_F(SessionManagerTest, ExpiryBoundaryExactlyAtLimitIsStillValid) {
-    const auto test_db = unique_db_path("test_session_boundary").string();
+    std::string test_db = "/tmp/test_session_boundary_" + std::to_string(getpid()) + ".db";
     unlink(test_db.c_str());
     SessionManager sm(test_db, 10);
 
@@ -324,7 +307,7 @@ TEST_F(SessionManagerTest, ExpiryBoundaryExactlyAtLimitIsStillValid) {
 
 // TEST validateSession() accepts sessions just inside expiry boundary
 TEST_F(SessionManagerTest, ExpiryNearBoundaryIsStillValid) {
-    const auto test_db = unique_db_path("test_session_boundary").string();
+    std::string test_db = "/tmp/test_session_boundary2_" + std::to_string(getpid()) + ".db";
     unlink(test_db.c_str());
     SessionManager sm(test_db, 10);
 
