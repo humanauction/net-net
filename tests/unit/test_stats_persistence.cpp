@@ -1,9 +1,10 @@
 #include <gtest/gtest.h>
 
 #include "core/StatsPersistence.h"
-
+#include <sqlite3.h>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -196,6 +197,50 @@ TEST(StatsPersistenceTest, LoadHistoryOneWindowReturnsAllFlowsFromNewestWindow) 
     EXPECT_NE(out[0].flows.find(n1), out[0].flows.end());
     EXPECT_NE(out[0].flows.find(n2), out[0].flows.end());
 
+    std::error_code ec;
+    fs::remove(db_path, ec);
+}
+
+// TEST: Constructor handles corrupted database file
+TEST(StatsPersistenceTest, ConstructorThrowsOnCorruptedDatabase) {
+    const fs::path db_path = unique_temp_path("netnet-stats-corrupt") += ".sqlite";
+    
+    // Create corrupted file
+    std::ofstream corrupt(db_path, std::ios::binary);
+    corrupt << "THIS IS NOT A SQLITE DATABASE FILE";
+    corrupt.close();
+    
+    // Constructor should throw
+    EXPECT_THROW({
+        StatsPersistence sp(db_path.string());
+    }, std::runtime_error);
+    
+    std::error_code ec;
+    fs::remove(db_path, ec);
+}
+
+// TEST: saveWindow with duplicate window_start timestamps
+TEST(StatsPersistenceTest, SaveWindowAllowsDuplicateTimestamps) {
+    const fs::path db_path = unique_temp_path("netnet-stats-dup") += ".sqlite";
+    StatsPersistence sp(db_path.string());
+    
+    auto same_time = std::chrono::system_clock::time_point{std::chrono::seconds{1700000000}};
+    
+    // Save two windows with same timestamp but different flows
+    AggregatedStats w1;
+    w1.window_start = same_time;
+    w1.flows.emplace(make_key("eth0", 6, "1.1.1.1", 80, "2.2.2.2", 443), FlowStats{});
+    sp.saveWindow(w1);
+    
+    AggregatedStats w2;
+    w2.window_start = same_time;
+    w2.flows.emplace(make_key("eth0", 6, "3.3.3.3", 80, "4.4.4.4", 443), FlowStats{});
+    
+    EXPECT_NO_THROW(sp.saveWindow(w2));
+    
+    auto loaded = sp.loadHistory(10);
+    EXPECT_GE(loaded.size(), 1);  // At least one window should be present
+    
     std::error_code ec;
     fs::remove(db_path, ec);
 }
