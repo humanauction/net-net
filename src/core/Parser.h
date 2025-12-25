@@ -22,6 +22,8 @@ struct TransportInfo {
     uint16_t dst_port = 0;
     uint8_t protocol = 0;
     uint8_t tcp_flags = 0; // Only for TCP
+    uint8_t icmp_type = 0; // Only for ICMP
+    uint8_t icmp_code = 0; // Only for ICMP
 };
 
 // Parsed packet structure

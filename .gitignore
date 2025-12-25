@@ -58,12 +58,18 @@ Testing/
 tests/output/
 *.log
 
-# Coverage reports
+# Coverage reports (HTML)
+coverage.html
+coverage*.html
+coverage.css
+coverage.functions.html
+
+# Coverage data files
+*.gcov
 *.gcda
 *.gcno
-*.gcov
-coverage/
-*.info
+*.gcov.json
+coverage.json
 
 # Sanitizer outputs
 *.dSYM/

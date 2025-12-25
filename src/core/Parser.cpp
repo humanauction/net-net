@@ -9,7 +9,7 @@ bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, Parsed
 
     // Ethernet
     uint16_t ethertype = (data[12] << 8 | data[13]);
-    char src_mac[18], dst_mac[18]; // <-- Only declare once, at the top of the function
+    char src_mac[18], dst_mac[18];
     snprintf(src_mac, sizeof(src_mac), "%02x:%02x:%02x:%02x:%02x:%02x",
              data[6], data[7], data[8], data[9], data[10], data[11]);
     snprintf(dst_mac, sizeof(dst_mac), "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -46,9 +46,12 @@ bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, Parsed
             offset += 8;
         }
         // ICMP
-        else if (out.network.protocol == 1 && len >= offset +4) {
-                out.transport.protocol = 1;
-                offset +=4;
+        else if (out.network.protocol == 1 && len >= offset + 4) {
+            const uint8_t* icmphdr = data + offset;
+            out.transport.protocol = 1;
+            out.transport.icmp_type = icmphdr[0];
+            out.transport.icmp_code = icmphdr[1];
+            offset += 4;
         }
     }
     // IPv6
@@ -62,7 +65,28 @@ bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, Parsed
         out.network.dst_ip = dst;
         out.network.protocol = ip6hdr[6];
         offset += 40;
-        // Only basic parsing for TCP/UDP/ICMPv6 here
+
+        // Parse IPv6 transport layer
+        if (out.network.protocol == 6 && len >= offset + 20) { // TCP
+            const uint8_t* tcphdr = data + offset;
+            out.transport.protocol = 6;
+            out.transport.src_port = ntohs(*(uint16_t*)(tcphdr));
+            out.transport.dst_port = ntohs(*(uint16_t*)(tcphdr + 2));
+            out.transport.tcp_flags = tcphdr[13];
+            offset += ((tcphdr[12] >> 4) & 0xF) * 4;
+        } else if (out.network.protocol == 17 && len >= offset + 8) { // UDP
+            const uint8_t* udphdr = data + offset;
+            out.transport.protocol = 17;
+            out.transport.src_port = ntohs(*(uint16_t*)(udphdr));
+            out.transport.dst_port = ntohs(*(uint16_t*)(udphdr + 2));
+            offset += 8;
+        } else if (out.network.protocol == 58 && len >= offset + 4) { // ICMPv6
+            const uint8_t* icmphdr = data + offset;
+            out.transport.protocol = 58;
+            out.transport.icmp_type = icmphdr[0];
+            out.transport.icmp_code = icmphdr[1];
+            offset += 4;
+        }
     } else {
         return false;
     }
