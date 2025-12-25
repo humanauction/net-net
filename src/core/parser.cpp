@@ -29,7 +29,8 @@ bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, Parsed
         offset += (iphdr[0] & 0x0F) * 4;
 
         //TCP
-        if (out.network.protocol == 6 && len >= offset + 20) {
+        if (out.network.protocol == 6) {
+            if (len < offset + 20) return false; // ✅ Truncated TCP
             const uint8_t* tcphdr = data + offset;
             out.transport.protocol = 6;
             out.transport.src_port = ntohs(*(uint16_t*)(tcphdr));
@@ -38,7 +39,8 @@ bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, Parsed
             offset += ((tcphdr[12] >> 4) & 0xF) * 4;
         }
         //UDP
-        else if (out.network.protocol == 17 && len >= offset + 8) {
+        else if (out.network.protocol == 17) {
+            if (len < offset + 8) return false; // ✅ Truncated UDP
             const uint8_t* udphdr = data + offset;
             out.transport.protocol = 17;
             out.transport.src_port = ntohs(*(uint16_t*)(udphdr));
@@ -46,7 +48,8 @@ bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, Parsed
             offset += 8;
         }
         // ICMP
-        else if (out.network.protocol == 1 && len >= offset + 4) {
+        else if (out.network.protocol == 1) {
+            if (len < offset + 4) return false; // ✅ Truncated ICMP
             const uint8_t* icmphdr = data + offset;
             out.transport.protocol = 1;
             out.transport.icmp_type = icmphdr[0];
@@ -67,20 +70,23 @@ bool parsePacket(const uint8_t* data, size_t len, const PacketMeta& meta, Parsed
         offset += 40;
 
         // Parse IPv6 transport layer
-        if (out.network.protocol == 6 && len >= offset + 20) { // TCP
+        if (out.network.protocol == 6) { // TCP
+            if (len < offset + 20) return false; // ✅ Truncated TCP
             const uint8_t* tcphdr = data + offset;
             out.transport.protocol = 6;
             out.transport.src_port = ntohs(*(uint16_t*)(tcphdr));
             out.transport.dst_port = ntohs(*(uint16_t*)(tcphdr + 2));
             out.transport.tcp_flags = tcphdr[13];
             offset += ((tcphdr[12] >> 4) & 0xF) * 4;
-        } else if (out.network.protocol == 17 && len >= offset + 8) { // UDP
+        } else if (out.network.protocol == 17) { // UDP
+            if (len < offset + 8) return false; // ✅ Truncated UDP
             const uint8_t* udphdr = data + offset;
             out.transport.protocol = 17;
             out.transport.src_port = ntohs(*(uint16_t*)(udphdr));
             out.transport.dst_port = ntohs(*(uint16_t*)(udphdr + 2));
             offset += 8;
-        } else if (out.network.protocol == 58 && len >= offset + 4) { // ICMPv6
+        } else if (out.network.protocol == 58) { // ICMPv6
+            if (len < offset + 4) return false; // ✅ Truncated ICMP
             const uint8_t* icmphdr = data + offset;
             out.transport.protocol = 58;
             out.transport.icmp_type = icmphdr[0];
