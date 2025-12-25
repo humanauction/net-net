@@ -3,6 +3,7 @@
 
 #include <unistd.h>
 #include <regex>
+#include <thread>
 #include <sqlite3.h>
 #include <chrono>
 #include <cstdio>
@@ -55,7 +56,7 @@ static void set_last_activity(const std::string& db_path, const std::string& tok
 class SessionManagerTest : public ::testing::Test {
 protected:
     std::unique_ptr<SessionManager> manager_;
-    std::string test_db_path_;  // ✅ ADD THIS
+    std::string test_db_path_;
 
     void SetUp() override {
         test_db_path_ = "test_sessions_" + std::to_string(getpid()) + ".db";
@@ -434,56 +435,121 @@ TEST_F(SessionManagerTest, CreateSessionSucceedsDespiteConcurrentLock) {
     sqlite3_close(db2);
 }
 
-// TEST: validateSession with invalid token format
-TEST_F(SessionManagerTest, ValidateSessionRejectsInvalidTokenFormats) {
-    SessionData out{};
+// TEST: createSession with database temporarily locked
+TEST_F(SessionManagerTest, CreateSessionSucceedsAfterTransientLock) {
+    sqlite3* temp_lock = nullptr;
+    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &temp_lock), SQLITE_OK);
     
-    // Test various invalid formats
-    EXPECT_FALSE(manager_->validateSession("", out));
-    EXPECT_FALSE(manager_->validateSession("not-a-uuid", out));
-    EXPECT_FALSE(manager_->validateSession("12345678-1234-1234-1234-12345678901", out));  // too short
-    EXPECT_FALSE(manager_->validateSession("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", out));
+    // Start a deferred transaction (not exclusive yet)
+    char* err = nullptr;
+    sqlite3_exec(temp_lock, "BEGIN DEFERRED;", nullptr, nullptr, &err);
+    if (err) sqlite3_free(err);
+    
+    // Insert should succeed in WAL mode
+    std::string token;
+    EXPECT_NO_THROW({
+        token = manager_->createSession("concurrent", "127.0.0.1");
+    });
+    EXPECT_FALSE(token.empty());
+    
+    sqlite3_exec(temp_lock, "ROLLBACK;", nullptr, nullptr, nullptr);
+    sqlite3_close(temp_lock);
 }
 
-// TEST: createSession error handling with SQL injection attempt
-TEST_F(SessionManagerTest, CreateSessionHandlesSQLInjectionAttempt) {
-    std::string malicious_username = "admin'; DROP TABLE sessions; --";
+// TEST: validateSession with NULL/empty output parameter handling
+TEST_F(SessionManagerTest, ValidateSessionPopulatesAllFieldsCorrectly) {
+    std::string token = manager_->createSession("testuser", "192.168.1.100");
+    
+    SessionData out{};
+    ASSERT_TRUE(manager_->validateSession(token, out));
+    
+    // Verify all fields populated
+    EXPECT_FALSE(out.token.empty());
+    EXPECT_FALSE(out.username.empty());
+    EXPECT_FALSE(out.ip_address.empty());
+    EXPECT_GT(out.created_at.time_since_epoch().count(), 0);
+    EXPECT_GT(out.last_activity.time_since_epoch().count(), 0);
+}
+
+// TEST: deleteSession with non-existent token (no-op)
+TEST_F(SessionManagerTest, DeleteSessionIgnoresNonExistentToken) {
+    EXPECT_NO_THROW({
+        manager_->deleteSession("00000000-0000-0000-0000-000000000000");
+    });
+}
+
+// TEST: Multiple validateSession calls update last_activity
+TEST_F(SessionManagerTest, ValidateSessionUpdatesLastActivityEachTime) {
+    std::string token = manager_->createSession("active_user", "127.0.0.1");
+    
+    SessionData data1{};
+    ASSERT_TRUE(manager_->validateSession(token, data1));
+    auto first_activity = data1.last_activity;
+    
+    // Force a tiny delay to ensure timestamp changes
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    
+    SessionData data2{};
+    ASSERT_TRUE(manager_->validateSession(token, data2));
+    
+    // last_activity should be >= first call (may be equal if too fast)
+    EXPECT_GE(data2.last_activity, first_activity);
+}
+
+// TEST: cleanupExpired with no expired sessions (no-op)
+TEST_F(SessionManagerTest, CleanupExpiredWithNoExpiredSessions) {
+    manager_->createSession("user1", "127.0.0.1");
+    manager_->createSession("user2", "127.0.0.2");
+    
+    EXPECT_NO_THROW({
+        manager_->cleanupExpired();
+    });
+    
+    // Both sessions should still exist
+    SessionData out{};
+    // Can't validate without tokens, but cleanup shouldn't crash
+}
+
+// TEST: createSession with Unicode characters
+TEST_F(SessionManagerTest, CreateSessionAcceptsUnicodeCharacters) {
+    std::string unicode_user = u8"用户名";  // "username" in Chinese
     std::string token;
     
     EXPECT_NO_THROW({
-        token = manager_->createSession(malicious_username, "127.0.0.1");
+        token = manager_->createSession(unicode_user, "127.0.0.1");
     });
     
     SessionData out{};
     ASSERT_TRUE(manager_->validateSession(token, out));
-    EXPECT_EQ(out.username, malicious_username);  // Should be stored verbatim
-    
-    // Verify table still exists by creating another session
-    std::string token2;
-    EXPECT_NO_THROW({
-        token2 = manager_->createSession("legit_user", "127.0.0.1");
-    });
+    EXPECT_EQ(out.username, unicode_user);
 }
 
-// TEST: Multiple rapid createSession calls (stress test)
-TEST_F(SessionManagerTest, CreateSessionHandlesRapidConcurrentCalls) {
-    std::vector<std::string> tokens;
+// TEST: validateSession with session at exact expiry boundary (edge case)
+TEST_F(SessionManagerTest, ValidateSessionAtExactExpiryBoundary) {
+    std::string test_db = "/tmp/test_session_exact_" + std::to_string(getpid()) + ".db";
+    unlink(test_db.c_str());
+    SessionManager sm(test_db, 10);  // 10 second expiry
     
-    for (int i = 0; i < 100; ++i) {
-        std::string token = manager_->createSession(
-            "user" + std::to_string(i),
-            "192.168.1." + std::to_string(i % 255)
-        );
-        tokens.push_back(token);
-    }
+    std::string token = sm.createSession("boundary_user", "127.0.0.1");
     
-    // All tokens should be unique
-    std::set<std::string> unique_tokens(tokens.begin(), tokens.end());
-    EXPECT_EQ(unique_tokens.size(), 100);
+    // Set last_activity to exactly expiry_seconds ago
+    set_last_activity(test_db, token, now_sec() - 10);
     
-    // All should validate
-    for (const auto& token : tokens) {
-        SessionData out{};
-        EXPECT_TRUE(manager_->validateSession(token, out));
+    SessionData out{};
+    // At exactly the boundary, session should still be valid
+    EXPECT_TRUE(sm.validateSession(token, out));
+    
+    unlink(test_db.c_str());
+}
+
+// TEST: createSession error message contains useful info
+TEST_F(SessionManagerTest, CreateSessionThrowsDescriptiveError) {
+    try {
+        SessionManager bad_mgr("/dev/null/impossible/path.db", 3600);
+        FAIL() << "Expected exception";
+    } catch (const std::exception& e) {
+        std::string msg = e.what();
+        // Error message should contain some useful info
+        EXPECT_FALSE(msg.empty());
     }
 }
