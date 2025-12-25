@@ -1,7 +1,7 @@
 #include "core/SessionManager.h"
 #include "../../include/net-net/vendor/uuid_gen.h"
 #include <SQLiteCpp/SQLiteCpp.h>
-#include <sqlite3.h>  // ✅ ADD: For SQLITE_BUSY and SQLITE_LOCKED constants
+#include <sqlite3.h>
 #include <stdexcept>
 #include <ctime>
 #include <iostream>
@@ -16,6 +16,14 @@ SessionManager::SessionManager(const std::string& db_path, int expiry_seconds)
     // Enable WAL mode for concurrency
     db_->exec("PRAGMA journal_mode=WAL;");
     db_->exec("PRAGMA busy_timeout=5000;");
+
+    // ✅ ADD: Test write access to detect read-only databases
+    try {
+        db_->exec("CREATE TABLE IF NOT EXISTS _write_test (id INTEGER);");
+        db_->exec("DROP TABLE _write_test;");
+    } catch (const SQLite::Exception& e) {
+        throw SQLite::Exception("Database is read-only or cannot be written to");
+    }
 
     // Create sessions table if it doesn't exist
     db_->exec(R"(
@@ -92,16 +100,19 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
                 return false;
             }
 
-            // ✅ FIXED: Try to update last_activity, but don't fail validation if locked
+            // ✅ FIXED: Track whether update succeeded
+            int64_t final_last_activity = last_activity;  // Default to old value
+            
             try {
                 SQLite::Statement update(*db_, "UPDATE sessions SET last_activity = ? WHERE token = ?");
                 update.bind(1, now_timestamp);
                 update.bind(2, token);
                 update.exec();
+                final_last_activity = now_timestamp;  // Update succeeded
             } catch (const SQLite::Exception& e) {
                 if (e.getErrorCode() == SQLITE_BUSY || e.getErrorCode() == SQLITE_LOCKED) {
                     std::cerr << "validateSession: last_activity update skipped (db busy)" << std::endl;
-                    // Continue with validation - session is still valid
+                    // Keep final_last_activity at old value
                 } else {
                     throw;
                 }
@@ -111,7 +122,7 @@ bool SessionManager::validateSession(const std::string& token, SessionData& out_
             out_data.token = token;
             out_data.username = username;
             out_data.created_at = std::chrono::system_clock::from_time_t(created_at);
-            out_data.last_activity = std::chrono::system_clock::from_time_t(now_timestamp);
+            out_data.last_activity = std::chrono::system_clock::from_time_t(final_last_activity);
             out_data.ip_address = client_ip;
 
             return true;
