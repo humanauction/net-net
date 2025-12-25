@@ -81,11 +81,12 @@ target_include_directories(netnet-core
 )
 
 target_link_libraries(netnet-core
-    PRIVATE
-        ${PCAP_LIBRARIES}
+    PUBLIC
         SQLiteCpp
         OpenSSL::SSL
-        OpenSSL::Crypto        
+        OpenSSL::Crypto
+    PRIVATE
+        ${PCAP_LIBRARIES}        
         pthread
         ${EXTRA_LIBS}
 )
