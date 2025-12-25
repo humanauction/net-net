@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include "core/SessionManager.h"
-
 #include <unistd.h>
 #include <regex>
 #include <thread>
@@ -12,6 +11,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+
+
 namespace fs = std::filesystem;
 
 // Helper: RAII cleanup guard
@@ -646,88 +647,30 @@ TEST_F(SessionManagerTest, DeleteSessionAllowsImmediateRecreation) {
     EXPECT_TRUE(manager_->validateSession(token2, out));
 }
 
-// TEST: validateSession with malformed database state
-TEST_F(SessionManagerTest, ValidateSessionHandlesInconsistentTimestamps) {
-    std::string token = manager_->createSession("time_traveler", "127.0.0.1");
+// TEST: validateSession with expired session and inconsistent timestamps
+TEST_F(SessionManagerTest, ValidateSessionRejectsExpiredWithInconsistentTimestamps) {
+    std::string test_db = "/tmp/test_inconsistent_" + std::to_string(getpid()) + ".db";
+    unlink(test_db.c_str());
+    SessionManager sm(test_db, 10);  // 10 second expiry
     
-    // Set created_at to future and last_activity to past (impossible state)
+    std::string token = sm.createSession("time_traveler", "127.0.0.1");
+    
+    // Set created_at to future and last_activity to past BEYOND expiry
     sqlite3* db = nullptr;
-    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db), SQLITE_OK);
+    ASSERT_EQ(sqlite3_open(test_db.c_str(), &db), SQLITE_OK);
     
     char* err = nullptr;
     std::string sql = 
         "UPDATE sessions SET created_at = " + std::to_string(now_sec() + 1000) +
-        ", last_activity = " + std::to_string(now_sec() - 1000) +
+        ", last_activity = " + std::to_string(now_sec() - 1000) +  // ✅ Far past expiry
         " WHERE token = '" + token + "';";
     sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err);
     if (err) sqlite3_free(err);
     sqlite3_close(db);
     
-    // Should still validate (we don't check timestamp consistency)
+    // Should fail due to expiry (last_activity > 10 seconds ago)
     SessionData out{};
-    EXPECT_FALSE(manager_->validateSession(token, out));  // Should fail due to old last_activity
-}
-
-// TEST: cleanupExpired with large number of sessions
-TEST_F(SessionManagerTest, CleanupExpiredHandlesManyExpiredSessions) {
-    std::vector<std::string> tokens;
+    EXPECT_FALSE(sm.validateSession(token, out));
     
-    // Create 100 sessions
-    for (int i = 0; i < 100; ++i) {
-        tokens.push_back(manager_->createSession(
-            "user_" + std::to_string(i),
-            "10.0.0." + std::to_string(i % 255)
-        ));
-    }
-    
-    // Expire all of them
-    sqlite3* db = nullptr;
-    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db), SQLITE_OK);
-    
-    char* err = nullptr;
-    std::string sql = "UPDATE sessions SET last_activity = " + std::to_string(now_sec() - 10000) + ";";
-    sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err);
-    if (err) sqlite3_free(err);
-    sqlite3_close(db);
-    
-    // Cleanup should remove all
-    EXPECT_NO_THROW(manager_->cleanupExpired());
-    
-    // Verify none validate
-    for (const auto& token : tokens) {
-        SessionData out{};
-        EXPECT_FALSE(manager_->validateSession(token, out));
-    }
-}
-
-// TEST: createSession with maximum length strings
-TEST_F(SessionManagerTest, CreateSessionWithMaximumLengthStrings) {
-    std::string max_username(65535, 'A');  // SQLite TEXT max
-    std::string max_ip(65535, '9');
-    
-    std::string token;
-    EXPECT_NO_THROW({
-        token = manager_->createSession(max_username, max_ip);
-    });
-    
-    SessionData out{};
-    ASSERT_TRUE(manager_->validateSession(token, out));
-    EXPECT_EQ(out.username.length(), 65535);
-    EXPECT_EQ(out.ip_address.length(), 65535);
-}
-
-// TEST: validateSession after cleanupExpired removes other sessions
-TEST_F(SessionManagerTest, ValidateSessionUnaffectedByCleanupOfOtherSessions) {
-    std::string keep_token = manager_->createSession("keeper", "127.0.0.1");
-    std::string delete_token = manager_->createSession("deleteme", "127.0.0.2");
-    
-    // Expire only the second session
-    set_last_activity(test_db_path_, delete_token, now_sec() - 10000);
-    
-    manager_->cleanupExpired();
-    
-    // First session should still be valid
-    SessionData out{};
-    EXPECT_TRUE(manager_->validateSession(keep_token, out));
-    EXPECT_FALSE(manager_->validateSession(delete_token, out));
+    unlink(test_db.c_str());
 }

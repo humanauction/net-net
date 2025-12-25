@@ -72,8 +72,7 @@ void NetMonDaemon::initializeFromConfig(const YAML::Node& config) {
         if (!log_file_.empty()) {
             log_stream_.open(log_file_, std::ios::app);
             if (!log_stream_) {
-                log("error", "Could not open log file: " + log_file_);
-                exit(1);
+                throw std::runtime_error("Could not open log file: " + log_file_);
             }
         }
     }

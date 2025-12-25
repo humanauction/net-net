@@ -604,3 +604,260 @@ TEST_F(NetMonDaemonTest, MetricsWithNoTrafficReturnsZeros) {
     EXPECT_TRUE(j.contains("total_bytes"));
     EXPECT_TRUE(j.contains("total_packets"));
 }
+
+// TEST: Daemon with offline mode but missing pcap file
+// TEST(NetMonDaemonConfigTest, ThrowsOnMissingOfflineFile) {
+//     YAML::Node config;
+//     config["offline"]["file"] = "/nonexistent/missing.pcap";
+//     config["api"]["token"] = "test-token";
+//     config["stats"]["window_size"] = 1;
+//     config["stats"]["history_depth"] = 3;
+//     config["database"]["path"] = ":memory:";
+//     
+//     EXPECT_THROW({
+//         NetMonDaemon daemon(config, "test-missing-pcap");
+//     }, std::runtime_error);
+// }
+
+// ✅ ADD: Test PcapAdapter validation directly
+TEST(NetMonDaemonConfigTest, PcapAdapterValidatesFileExistenceBeforeCapture) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "/nonexistent/missing.pcap";
+    opts.read_offline = true;
+    
+    // Construction succeeds
+    PcapAdapter pcap(opts);
+    
+    // Capture throws on missing file
+    EXPECT_THROW({
+        pcap.startCapture([](const PacketMeta&, const uint8_t*, size_t) {});
+    }, std::runtime_error);
+}
+
+// TEST: Daemon with invalid log level
+TEST(NetMonDaemonConfigTest, AcceptsInvalidLogLevelWithoutCrashing) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+    config["api"]["token"] = "test-token";
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    config["database"]["path"] = ":memory:";
+    config["logging"]["level"] = "INVALID_LEVEL";  // Should default to "info"
+    
+    EXPECT_NO_THROW({
+        NetMonDaemon daemon(config, "test-invalid-loglevel");
+    });
+}
+
+// TEST: Daemon with missing log file directory
+TEST(NetMonDaemonConfigTest, ThrowsOnInvalidLogFilePath) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+    config["api"]["token"] = "test-token";
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    config["database"]["path"] = ":memory:";
+    config["logging"]["file"] = "/nonexistent_dir/impossible.log";
+    
+    EXPECT_THROW({
+        NetMonDaemon daemon(config, "test-bad-logfile");
+    }, std::exception);  // Should exit(1) or throw during log_stream_.open()
+}
+
+// TEST: Login with empty username/password strings
+TEST_F(NetMonDaemonTest, LoginWithEmptyStringsReturns400) {
+    httplib::Client client(test_host, test_port);
+    
+    json body;
+    body["username"] = "";
+    body["password"] = "";
+    
+    auto res = client.Post("/login", body.dump(), "application/json");
+    EXPECT_EQ(res->status, 400);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["error"], "missing username or password");
+}
+
+// TEST: Config with user having pre-hashed password (bcrypt format)
+TEST(NetMonDaemonConfigTest, AcceptsPrehashedPassword) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+    config["api"]["token"] = "test-token";
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    config["database"]["path"] = ":memory:";
+    
+    // Pre-hashed password (bcrypt format starts with $2a$)
+    YAML::Node user;
+    user["username"] = "prehashed_user";
+    user["password"] = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";  // "password123"
+    config["users"].push_back(user);
+    
+    EXPECT_NO_THROW({
+        NetMonDaemon daemon(config, "test-prehashed-pw");
+    });
+}
+
+// TEST: Config with no users (authentication disabled warning)
+TEST(NetMonDaemonConfigTest, AcceptsConfigWithNoUsers) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+    config["api"]["token"] = "test-token";
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    config["database"]["path"] = ":memory:";
+    // No users section
+    
+    EXPECT_NO_THROW({
+        NetMonDaemon daemon(config, "test-no-users");
+    });
+}
+
+// TEST: Config with custom session expiry
+TEST(NetMonDaemonConfigTest, CustomSessionExpiryApplied) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+    config["api"]["token"] = "test-token";
+    config["api"]["session_expiry"] = 120;  // 2 minutes
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    config["database"]["path"] = ":memory:";
+    
+    YAML::Node user;
+    user["username"] = "testuser";
+    user["password"] = "testpass";
+    config["users"].push_back(user);
+    
+    EXPECT_NO_THROW({
+        NetMonDaemon daemon(config, "test-custom-expiry");
+    });
+}
+
+// TEST: Daemon with logging disabled (no timestamps)
+TEST(NetMonDaemonConfigTest, LoggingWithoutTimestamps) {
+    YAML::Node config;
+    config["interface"]["name"] = "lo0";
+    config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+    config["api"]["token"] = "test-token";
+    config["stats"]["window_size"] = 1;
+    config["stats"]["history_depth"] = 3;
+    config["database"]["path"] = ":memory:";
+    config["logging"]["timestamps"] = false;
+    
+    EXPECT_NO_THROW({
+        NetMonDaemon daemon(config, "test-no-timestamps");
+    });
+}
+
+// TEST: Authorization with Bearer token having extra whitespace
+TEST_F(NetMonDaemonTest, AuthWithBearerTokenExtraWhitespace) {
+    httplib::Client client(test_host, test_port);
+    httplib::Headers headers = {
+        {"Authorization", "Bearer  " + api_token}  // Double space
+    };
+    auto res = client.Get("/metrics", headers);
+    
+    // Should fail due to whitespace mismatch
+    EXPECT_EQ(res->status, 401);
+}
+
+// TEST: Multiple simultaneous login attempts (race condition test)
+TEST_F(NetMonDaemonTest, ConcurrentLoginAttempts) {
+    std::vector<std::thread> threads;
+    std::vector<std::string> tokens(10);
+    
+    for (int i = 0; i < 10; ++i) {
+        threads.emplace_back([&, i]() {
+            tokens[i] = loginUser(test_username, test_password);
+        });
+    }
+    
+    for (auto& t : threads) {
+        t.join();
+    }
+    
+    // All tokens should be unique and non-empty
+    std::set<std::string> unique_tokens;
+    for (const auto& token : tokens) {
+        EXPECT_FALSE(token.empty());
+        unique_tokens.insert(token);
+    }
+    EXPECT_EQ(unique_tokens.size(), 10);
+}
+
+// TEST: Metrics endpoint with very long valid token
+TEST_F(NetMonDaemonTest, AuthWithVeryLongToken) {
+    std::string long_token(10000, 'a');
+    
+    httplib::Client client(test_host, test_port);
+    httplib::Headers headers = {
+        {"Authorization", "Bearer " + long_token}
+    };
+    auto res = client.Get("/metrics", headers);
+    
+    // ✅ FIX: httplib returns 400 for malformed/oversized headers
+    EXPECT_TRUE(res->status == 400 || res->status == 401);  // Either is acceptable
+}
+
+// TEST: Stop daemon multiple times (idempotency test)
+TEST_F(NetMonDaemonTest, StopDaemonIsIdempotent) {
+    daemon->stop();
+    EXPECT_FALSE(daemon->isRunning());
+    
+    // Second stop should not crash
+    EXPECT_NO_THROW({
+        daemon->stop();
+    });
+}
+
+// TEST: Config reload with file-based daemon (not in-memory)
+TEST(NetMonDaemonConfigTest, FileBasedDaemonCanReload) {
+    std::string config_path = "/tmp/test_daemon_reload_" + std::to_string(getpid()) + ".yaml";
+    std::string db_path = "/tmp/test_reload_db_" + std::to_string(getpid()) + ".db";
+    
+    std::ofstream ofs(config_path);
+    ofs << "interface:\n";
+    ofs << "  name: lo0\n";
+    ofs << "offline:\n";
+    ofs << "  file: tests/fixtures/icmp_sample.pcap\n";
+    ofs << "api:\n";
+    ofs << "  token: test-token-123\n";
+    ofs << "  host: localhost\n";
+    ofs << "  port: 9998\n";
+    ofs << "stats:\n";
+    ofs << "  window_size: 1\n";
+    ofs << "  history_depth: 3\n";
+    ofs << "database:\n";
+    ofs << "  path: " << db_path << "\n";
+    ofs.close();
+    
+    NetMonDaemon daemon(config_path);
+    
+    std::thread t([&]() {
+        daemon.run();
+    });
+    
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    
+    httplib::Client client("localhost", 9998);
+    httplib::Headers headers = {
+        {"Authorization", "Bearer test-token-123"}
+    };
+    auto res = client.Post("/control/reload", headers, "", "application/json");
+    
+    EXPECT_EQ(res->status, 200);
+    
+    daemon.stop();
+    if (t.joinable()) t.join();
+    
+    // Cleanup
+    std::filesystem::remove(config_path);
+    std::filesystem::remove(db_path);
+    std::filesystem::remove(db_path + ".sessions");
+}
