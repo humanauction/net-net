@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 namespace fs = std::filesystem;
 
 // Helper: RAII cleanup guard
@@ -549,7 +550,184 @@ TEST_F(SessionManagerTest, CreateSessionThrowsDescriptiveError) {
         FAIL() << "Expected exception";
     } catch (const std::exception& e) {
         std::string msg = e.what();
-        // Error message should contain some useful info
+        // TODO: Error message should contain useful info, error code, etc.
         EXPECT_FALSE(msg.empty());
     }
+}
+
+// TEST: Force SQLite busy error during createSession
+TEST_F(SessionManagerTest, CreateSessionHandlesBusyDatabaseGracefully) {
+    // Create a second connection with zero timeout to force SQLITE_BUSY
+    sqlite3* blocking_conn = nullptr;
+    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &blocking_conn), SQLITE_OK);
+    sqlite3_busy_timeout(blocking_conn, 0);  // No waiting
+    
+    // Lock the database with EXCLUSIVE transaction
+    char* err = nullptr;
+    sqlite3_exec(blocking_conn, "BEGIN EXCLUSIVE;", nullptr, nullptr, &err);
+    if (err) sqlite3_free(err);
+    
+    // Hold the lock for a short time in a separate thread
+    std::thread locker([&]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        sqlite3_exec(blocking_conn, "ROLLBACK;", nullptr, nullptr, nullptr);
+        sqlite3_close(blocking_conn);
+    });
+    
+    // This should retry and eventually succeed (manager has 5000ms busy timeout)
+    std::string token;
+    EXPECT_NO_THROW({
+        token = manager_->createSession("retry_user", "127.0.0.1");
+    });
+    EXPECT_FALSE(token.empty());
+    
+    locker.join();
+}
+
+// TEST: validateSession error handling when database is corrupted mid-operation
+TEST_F(SessionManagerTest, ValidateSessionHandlesDatabaseCorruption) {
+    std::string token = manager_->createSession("victim", "127.0.0.1");
+    
+    // Corrupt the database by truncating it
+    manager_.reset();  // Close connection first
+    
+    // Truncate the file to force corruption
+    std::ofstream corruptor(test_db_path_, std::ios::binary | std::ios::trunc);
+    corruptor << "CORRUPTED";
+    corruptor.close();
+    
+    // Reopen and attempt to validate
+    EXPECT_THROW({
+        manager_ = std::make_unique<SessionManager>(test_db_path_, 3600);
+    }, SQLite::Exception);
+}
+
+// TEST: createSession with very rapid successive calls (race condition test)
+TEST_F(SessionManagerTest, CreateSessionHandlesRapidSuccessiveCalls) {
+    std::vector<std::thread> threads;
+    std::vector<std::string> tokens(10);
+    
+    for (int i = 0; i < 10; ++i) {
+        threads.emplace_back([&, i]() {
+            tokens[i] = manager_->createSession(
+                "thread_user_" + std::to_string(i),
+                "127.0.0." + std::to_string(i)
+            );
+        });
+    }
+    
+    for (auto& t : threads) {
+        t.join();
+    }
+    
+    // Verify all tokens are unique and valid
+    std::set<std::string> unique_tokens(tokens.begin(), tokens.end());
+    EXPECT_EQ(unique_tokens.size(), 10);
+    
+    for (const auto& token : tokens) {
+        SessionData out{};
+        EXPECT_TRUE(manager_->validateSession(token, out));
+    }
+}
+
+// TEST: deleteSession followed by immediate createSession with same username
+TEST_F(SessionManagerTest, DeleteSessionAllowsImmediateRecreation) {
+    std::string token1 = manager_->createSession("reusable_user", "127.0.0.1");
+    
+    manager_->deleteSession(token1);
+    
+    // Immediately create new session with same username
+    std::string token2 = manager_->createSession("reusable_user", "127.0.0.1");
+    
+    EXPECT_NE(token1, token2);  // Tokens must be different
+    
+    SessionData out{};
+    EXPECT_FALSE(manager_->validateSession(token1, out));
+    EXPECT_TRUE(manager_->validateSession(token2, out));
+}
+
+// TEST: validateSession with malformed database state
+TEST_F(SessionManagerTest, ValidateSessionHandlesInconsistentTimestamps) {
+    std::string token = manager_->createSession("time_traveler", "127.0.0.1");
+    
+    // Set created_at to future and last_activity to past (impossible state)
+    sqlite3* db = nullptr;
+    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db), SQLITE_OK);
+    
+    char* err = nullptr;
+    std::string sql = 
+        "UPDATE sessions SET created_at = " + std::to_string(now_sec() + 1000) +
+        ", last_activity = " + std::to_string(now_sec() - 1000) +
+        " WHERE token = '" + token + "';";
+    sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err);
+    if (err) sqlite3_free(err);
+    sqlite3_close(db);
+    
+    // Should still validate (we don't check timestamp consistency)
+    SessionData out{};
+    EXPECT_FALSE(manager_->validateSession(token, out));  // Should fail due to old last_activity
+}
+
+// TEST: cleanupExpired with large number of sessions
+TEST_F(SessionManagerTest, CleanupExpiredHandlesManyExpiredSessions) {
+    std::vector<std::string> tokens;
+    
+    // Create 100 sessions
+    for (int i = 0; i < 100; ++i) {
+        tokens.push_back(manager_->createSession(
+            "user_" + std::to_string(i),
+            "10.0.0." + std::to_string(i % 255)
+        ));
+    }
+    
+    // Expire all of them
+    sqlite3* db = nullptr;
+    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db), SQLITE_OK);
+    
+    char* err = nullptr;
+    std::string sql = "UPDATE sessions SET last_activity = " + std::to_string(now_sec() - 10000) + ";";
+    sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err);
+    if (err) sqlite3_free(err);
+    sqlite3_close(db);
+    
+    // Cleanup should remove all
+    EXPECT_NO_THROW(manager_->cleanupExpired());
+    
+    // Verify none validate
+    for (const auto& token : tokens) {
+        SessionData out{};
+        EXPECT_FALSE(manager_->validateSession(token, out));
+    }
+}
+
+// TEST: createSession with maximum length strings
+TEST_F(SessionManagerTest, CreateSessionWithMaximumLengthStrings) {
+    std::string max_username(65535, 'A');  // SQLite TEXT max
+    std::string max_ip(65535, '9');
+    
+    std::string token;
+    EXPECT_NO_THROW({
+        token = manager_->createSession(max_username, max_ip);
+    });
+    
+    SessionData out{};
+    ASSERT_TRUE(manager_->validateSession(token, out));
+    EXPECT_EQ(out.username.length(), 65535);
+    EXPECT_EQ(out.ip_address.length(), 65535);
+}
+
+// TEST: validateSession after cleanupExpired removes other sessions
+TEST_F(SessionManagerTest, ValidateSessionUnaffectedByCleanupOfOtherSessions) {
+    std::string keep_token = manager_->createSession("keeper", "127.0.0.1");
+    std::string delete_token = manager_->createSession("deleteme", "127.0.0.2");
+    
+    // Expire only the second session
+    set_last_activity(test_db_path_, delete_token, now_sec() - 10000);
+    
+    manager_->cleanupExpired();
+    
+    // First session should still be valid
+    SessionData out{};
+    EXPECT_TRUE(manager_->validateSession(keep_token, out));
+    EXPECT_FALSE(manager_->validateSession(delete_token, out));
 }
