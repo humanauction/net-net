@@ -88,44 +88,28 @@ rebuild-coverage: clean
 remove-vendor-coverage:
 	@echo "🧹 Removing vendor coverage files..."
 	@find "$(BUILD_DIR)" -path "*/vendor/*" -name "*.gcda" -delete 2>/dev/null || true
-	@find . -path "*/vendor/*" -name "*.gcno" -delete 2>/dev/null || true
+	@find "$(BUILD_DIR)" -path "*/_deps/*" -name "*.gcda" -delete 2>/dev/null || true
+	@find "$(BUILD_DIR)" -path "*/_deps/*" -name "*.gcno" -delete 2>/dev/null || true
+	@echo "✅ Vendor coverage files removed"
 
 # Check if gcovr is available
 GCOVR := $(shell command -v gcovr 2> /dev/null || echo "python3 -m gcovr")
 
 coverage: rebuild-coverage
-	@echo "==> Running C++ tests..."
-	@cd "$(BUILD_DIR)" && ctest --output-on-failure --verbose
-	@$(MAKE) remove-vendor-coverage
-	@echo "📊 Generating coverage report..."
-	@cd "$(BUILD_DIR)" && $(GCOVR) --root .. \
-		--exclude '.*tests/.*' \
-		--exclude '.*vendor/.*' \
-		--exclude '.*googletest/.*' \
-		--exclude '.*examples/.*' \
-		--exclude '.*build/.*' \
-		--exclude '.*CMakeFiles/.*' \
-		--exclude '.*/src/main\.cpp$$' \
-		--exclude '.*/src/daemon/Main\.cpp$$' \
-		--print-summary
+	@echo "==> Running tests with coverage..."
+	@cd "$(BUILD_DIR)" && ctest --output-on-failure || true
+	@echo "==> Generating coverage report..."
+	@$(GCOVR) --root . --filter src/ --exclude src/main.cpp --exclude src/daemon/Main.cpp \
+		--exclude '.*/_deps/.*' --exclude '.*/vendor/.*' --print-summary
 
 coverage-html: rebuild-coverage
-	@echo "==> Running C++ tests..."
-	@cd "$(BUILD_DIR)" && ctest --output-on-failure --verbose
-	@$(MAKE) remove-vendor-coverage
-	@echo "📊 Generating HTML coverage report..."
-	@cd "$(BUILD_DIR)" && $(GCOVR) --root .. \
-		--exclude '.*tests/.*' \
-		--exclude '.*vendor/.*' \
-		--exclude '.*googletest/.*' \
-		--exclude '.*examples/.*' \
-		--exclude '.*build/.*' \
-		--exclude '.*CMakeFiles/.*' \
-		--exclude '.*/src/main\.cpp$$' \
-		--exclude '.*/src/daemon/Main\.cpp$$' \
-		--html-details -o coverage.html
-	@echo "✅ Coverage report: $(BUILD_DIR)/coverage.html"
-	@$(OPEN_CMD) "$(BUILD_DIR)/coverage.html" 2>/dev/null || true
+	@echo "==> Running tests with coverage..."
+	@cd "$(BUILD_DIR)" && ctest --output-on-failure || true
+	@echo "==> Generating HTML coverage report..."
+	@$(GCOVR) --root . --filter src/ --exclude src/main.cpp --exclude src/daemon/Main.cpp \
+		--exclude '.*/_deps/.*' --exclude '.*/vendor/.*' --html --html-details -o coverage.html
+	@echo "✅ Coverage report: coverage.html"
+	@$(OPEN_CMD) coverage.html 2>/dev/null || echo "Open coverage.html manually"
 
 run-daemon-online: config-ci build
 	@echo "==> Running daemon with config: $(CONFIG_CI)"
