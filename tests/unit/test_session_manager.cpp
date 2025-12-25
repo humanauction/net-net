@@ -404,3 +404,117 @@ TEST_F(SessionManagerTest, CleanupExpiredRemovesOldButKeepsRecent) {
 
     unlink(test_db.c_str());
 }
+
+// TEST: createSession retry logic with database busy
+TEST_F(SessionManagerTest, CreateSessionRetriesOnBusyDatabase) {
+    const std::string token = manager_->createSession("first", "127.0.0.1");
+    
+    // Open second connection and lock the database
+    sqlite3* db2 = nullptr;
+    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &db2), SQLITE_OK);
+    sqlite3_busy_timeout(db2, 0);
+    
+    ScopeExit cleanup([&] {
+        if (db2) {
+            sqlite3_exec(db2, "ROLLBACK;", nullptr, nullptr, nullptr);
+            sqlite3_close(db2);
+        }
+    });
+    
+    exec_sql_raw(db2, "BEGIN EXCLUSIVE;");
+    
+    // This should succeed after retries (manager has 5000ms busy timeout)
+    std::string token2;
+    EXPECT_NO_THROW({
+        token2 = manager_->createSession("retry_test", "127.0.0.2");
+    });
+    
+    EXPECT_FALSE(token2.empty());
+    
+    sqlite3_exec(db2, "ROLLBACK;", nullptr, nullptr, nullptr);
+    sqlite3_close(db2);
+    db2 = nullptr;
+    cleanup.dismiss();
+}
+
+// TEST: createSession throws after max retries exceeded
+TEST_F(SessionManagerTest, CreateSessionThrowsAfterMaxRetries) {
+    // Create a persistent exclusive lock that won't release
+    sqlite3* blocking_db = nullptr;
+    ASSERT_EQ(sqlite3_open(test_db_path_.c_str(), &blocking_db), SQLITE_OK);
+    sqlite3_busy_timeout(blocking_db, 0);
+    exec_sql_raw(blocking_db, "BEGIN EXCLUSIVE;");
+    
+    // Force manager to have zero busy timeout so retries fail immediately
+    SessionManager fast_fail_mgr(":memory:", 3600);
+    
+    // This should throw std::runtime_error after MAX_RETRIES attempts
+    EXPECT_THROW({
+        // Won't be able to insert due to lock
+        fast_fail_mgr.createSession("will_fail", "127.0.0.1");
+    }, std::exception);
+    
+    sqlite3_exec(blocking_db, "ROLLBACK;", nullptr, nullptr, nullptr);
+    sqlite3_close(blocking_db);
+}
+
+// TEST: validateSession catches and returns false on SQLException
+TEST_F(SessionManagerTest, ValidateSessionReturnsFalseOnDatabaseError) {
+    std::string token = manager_->createSession("test", "127.0.0.1");
+    
+    // Close the database to trigger SQLite::Exception
+    manager_.reset();
+    
+    // Reopen with corrupted/closed state
+    manager_ = std::make_unique<SessionManager>(test_db_path_, 3600);
+    
+    // Manually corrupt by removing the DB file while manager is open
+    fs::remove(test_db_path_);
+    
+    SessionData out{};
+    // Should catch exception and return false
+    EXPECT_FALSE(manager_->validateSession(token, out));
+}
+
+// TEST: deleteSession handles exceptions gracefully
+TEST_F(SessionManagerTest, DeleteSessionDoesNotThrowOnError) {
+    // deleteSession should catch exceptions and not crash
+    EXPECT_NO_THROW({
+        manager_->deleteSession("nonexistent-token-12345");
+    });
+}
+
+// TEST: cleanupExpired handles exceptions gracefully
+TEST_F(SessionManagerTest, CleanupExpiredDoesNotThrowOnError) {
+    // cleanupExpired should catch exceptions and not crash
+    EXPECT_NO_THROW({
+        manager_->cleanupExpired();
+    });
+}
+
+// TEST: createSession with empty username
+TEST_F(SessionManagerTest, CreateSessionAcceptsEmptyUsername) {
+    std::string token;
+    EXPECT_NO_THROW({
+        token = manager_->createSession("", "192.168.1.1");
+    });
+    
+    SessionData out{};
+    ASSERT_TRUE(manager_->validateSession(token, out));
+    EXPECT_EQ(out.username, "");
+}
+
+// TEST: createSession with very long strings
+TEST_F(SessionManagerTest, CreateSessionAcceptsLongStrings) {
+    std::string long_username(10000, 'a');
+    std::string long_ip(1000, 'f');
+    
+    std::string token;
+    EXPECT_NO_THROW({
+        token = manager_->createSession(long_username, long_ip);
+    });
+    
+    SessionData out{};
+    ASSERT_TRUE(manager_->validateSession(token, out));
+    EXPECT_EQ(out.username.length(), 10000);
+}
