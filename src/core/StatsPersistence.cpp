@@ -2,6 +2,7 @@
 #include <sqlite3.h>
 #include <iostream>
 #include <map>
+#include <vector>
 
 StatsPersistence::StatsPersistence(const std::string& db_path)
     : db_path_(db_path), db_(nullptr) {
@@ -171,4 +172,95 @@ std::vector<AggregatedStats> StatsPersistence::loadHistory(size_t max_windows) {
         history.push_back(std::move(kv.second));
     }
     return history;
+}
+
+std::vector<AggregatedStats> StatsPersistence::loadHistoryRange(
+    int64_t start_timestamp,
+    int64_t end_timestamp,
+    size_t limit
+) {
+    std::vector<AggregatedStats> result;
+
+    // Build SQL query with time-range filter
+    std::string sql = R"(
+        SELECT
+            window_start, total_bytes, total_packets, 
+            tcp_bytes, udp_bytes, icmp_bytes, other_bytes,
+            tcp_packets, udp_packets, icmp_packets, other_packets
+        FROM agg_stats
+        WHERE window_start BETWEEN ? AND ?
+        ORDER BY window_start DESC
+        LIMIT ?
+    )";
+
+    sqlite3_stmt* stmt = nullptr;
+    int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+
+    if (rc != SQLITE_OK) {
+        std::cerr << "[StatsPersistence] Failed to prepare range query: " 
+                  << sqlite3_errmsg(db_) << std::endl;
+        return result;
+    }
+
+    // Bind params
+    sqlite3_bind_int64(stmt, 1, start_timestamp);
+    sqlite3_bind_int64(stmt, 2, end_timestamp);
+    sqlite3_bind_int64(stmt, 3, static_cast<int64_t>(limit));
+
+    // Execute and collect results
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        AggregatedStats stats;
+
+        int64_t ts = sqlite3_column_int64(stmt, 0);
+        stats.window_start = std::chrono::system_clock::from_time_t(ts);
+
+        stats.total_bytes = sqlite3_column_int64(stmt, 1);
+        stats.total_packets = sqlite3_column_int64(stmt, 2);
+
+        // Protocl breakdown
+        stats.procotol_bytes["TCP"] = sqlite3_column_int64(stmt, 3);
+        stats.procotol_bytes["UDP"] = sqlite3_column_int64(stmt, 4);
+        stats.procotol_bytes["ICMP"] = sqlite3_column_int64(stmt, 5);
+        stats.procotol_bytes["OTHER"] = sqlite3_column_int64(stmt, 6);
+
+        stats.procotol_packets["TCP"] = sqlite3_column_int64(stmt, 7);
+        stats.procotol_packets["UDP"] = sqlite3_column_int64(stmt, 8);
+        stats.procotol_packets["ICMP"] = sqlite3_column_int64(stmt, 9);
+        stats.procotol_packets["OTHER"] = sqlite3_column_int64(stmt, 10);
+
+        result.push_back(stats);
+    }
+
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+void StatsPersistence::cleanupOldRecords(int retention_days) {
+    int64_t cutoff_timestamp = std::chrono::system_clock::to_time_t(
+        std::chrono::system_clock::now() - std::chrono::hours(24 * retention_days)
+    );
+    
+    std::string sql = "DELETE FROM agg_stats WHERE window_start < ?";
+    
+    sqlite3_stmt* stmt = nullptr;
+    int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        std::cerr << "[StatsPersistence] Failed to prepare cleanup: " 
+                  << sqlite3_errmsg(db_) << std::endl;
+        return;
+    }
+    
+    sqlite3_bind_int64(stmt, 1, cutoff_timestamp);
+    
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        std::cerr << "[StatsPersistence] Cleanup failed: " 
+                  << sqlite3_errmsg(db_) << std::endl;
+    } else {
+        int deleted = sqlite3_changes(db_);
+        std::cout << "[StatsPersistence] Cleanup removed " << deleted 
+                  << " old records (retention: " << retention_days << " days)" << std::endl;
+    }
+
+    sqlite3_finalize(stmt);
 }
