@@ -11,6 +11,14 @@ struct AggregatedStats {
     std::chrono::system_clock::time_point window_start;
     std::unordered_map<FlowKey, FlowStats> flows;
     // TODO Add more fields here (e.g. totals, protocol breakdown)
+    // total bytes, packets
+    uint64_t total_bytes = 0;
+    uint64_t total_packets = 0;
+    // protocol breakdown
+    std::unordered_map<uint8_t, uint64_t> protocol_bytes;
+    std::unordered_map<uint8_t, uint64_t> protocol_packets;
+
+    AggregatedStats() = default;
 };
 
 class StatsAggregator {

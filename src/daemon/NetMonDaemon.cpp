@@ -17,6 +17,8 @@
 #include <nlohmann/json.hpp>
 #include "core/SessionManager.h"
 #include "../../include/net-net/vendor/bcrypt.h"
+#include "core/StatsAggregator.h"
+#include "core/StatsPersistence.h"
 
 
 
@@ -203,11 +205,40 @@ void NetMonDaemon::run() {
             log("error", "Capture failed: " + std::string(ex.what()));
         }
     });
+
+    // Daily cleanup job
+    std::thread cleanup_thread([this]() {
+        while (running_.load()) {
+            // calc: time unitl next midnight UTC
+            auto now = std::chrono::system_clock::now();
+            auto now_t = std::chrono::system_clock::to_time_t(now);
+            std::tm* now_tm = std::gmtime(&now_t);
+
+            // next midnight UDC
+            std::tm next_midnight = *now_tm;
+            next_midnight.tm_hour = 0;
+            next_midnight.tm_min = 0;
+            next_midnight.tm_sec = 0;
+            next_midnight.tm_mday += 1;
+
+            auto next_midnight_tp = std::chrono::system_clock::from_time_t(std::mktime(&next_midnight));
+            auto sleep_duration = next_midnight_tp - now;
+            
+            // sleep until midnight, check every 60 seconds if daemon stops
+            auto sleep_minutes = std::chrono::duration_cast<std::chrono::minutes>(sleep_duration).count();
+            for (int i = 0; i < sleep_minutes && running_.load(); ++i) {
+                std::this_thread::sleep_for(std::chrono::minutes(1));
+            }
+            if (!running_.load()) break;
+
+            // cleanup
+            log("info", "Running daily database cleanup (7-day retention)...");
+            persistence_->cleanupOldRecords(7);
+        }
+    });
     
     // Start API server
     startServer();
-    
-    
 
     // Live mode: keep server running until stop() is called
     log("info", "API server ready...");
@@ -462,6 +493,111 @@ void NetMonDaemon::setupApiRoutes() {
             res.set_content(std::string("{\"error\":\"") + ex.what() + "\"}", "application/json");
         }
     });
+
+    svr_.Get("/metrics/history", [this](const httplib::Request& req, httplib::Response& res) {
+        if (!isAuthorized(req)) {
+            logAuthFailure(req);
+            res.status = 401;
+            res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+            return;
+        }
+
+        // Parse query params
+        int64_t start_ts = 0;
+        int64_t end_ts = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        size_t limit = 1220;
+
+        // Parse start param
+        if (req.has_param("start")) {
+            try {
+                start_ts = std::stoll(req.get_param_value("start"));
+            } catch (...) {
+                res.status = 400;
+                res.set_content("{\"error\":\"invalid 'start' timestamp\"}", "application/json");
+                return;
+            }
+        } else {
+            start_ts = end_ts - (24 * 3600);
+        }
+
+        // Parse end param
+        if (req.has_param("end")) {
+            try {
+                end_ts = std::stoll(req.get_param_value("end"));
+            } catch (...) {
+                res.status = 400;
+                res.set_content("{\"error\":\"invalid 'end' timestamp\"}", "application/json");
+                return;
+            }
+        }
+
+        // Parse limit param
+        if (req.has_param("limit")) {
+            try {
+                limit = std::stoll(req.get_param_value("limit"));
+                if (limit > 43200) {
+                    limit = 43200;
+                }
+            } catch (...) {
+                res.status = 400;
+                res.set_content("{\"error\":\"invalid 'limit' timestamp\"}", "application/json");
+                return;
+            }
+        }
+
+        // Validate timestamp range
+        if (start_ts >= end_ts) {
+            res.status = 400;
+            res.set_content("{\"error\":\"start must be before end\"}", "application/json");
+            return;
+        }
+
+        // Query Database
+        auto history = persistence_->loadHistoryRange(start_ts, end_ts, limit);
+
+
+        // Build json response
+        nlohmann::json response;
+        response["start"] = start_ts;
+        response["end"] = end_ts;
+        response["count"] = history.size();
+
+        nlohmann::json windows = nlohmann::json::array();
+        for (const auto& stats : history) {
+            nlohmann::json window;
+
+            int64_t window_ts = std::chrono::system_clock::to_time_t(stats.window_start);
+            window["timestamp"] = window_ts;
+            window["window_start"] = window_ts;
+            window["total_bytes"] = stats.total_bytes;
+            window["total_packets"] = stats.total_packets;
+
+            // Calculation for bytes_per_second (assume 60-sec window)
+            uint64_t total_bytes = 0;
+            for (const auto& [proto, bytes] : stats.protocol_bytes) {
+                total_bytes += bytes;
+            }
+            window["bytes_per_second"] = total_bytes / 60;
+
+            // Protocol breakdown
+            nlohmann::json proto_breakdown;
+            for (const auto& [proto, bytes] : stats.protocol_bytes) {
+                if (bytes > 0) {
+                    proto_breakdown[proto] = bytes;
+                }
+            }
+            window["protocol_breakdown"] = proto_breakdown;  
+            
+            // active flows not stored in historical data (too large)
+            window["acvtive_flows"] = nlohmann::json::array();
+
+            windows.push_back(window);
+
+            }
+
+            response["windows"] = windows;
+            res.set_content(response.dump(), "application/json");
+        });
 }
 
 void NetMonDaemon::startServer() {

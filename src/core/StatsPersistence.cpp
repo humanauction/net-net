@@ -1,4 +1,5 @@
 #include "core/StatsPersistence.h"
+#include "core/StatsAggregator.h"
 #include <sqlite3.h>
 #include <iostream>
 #include <map>
@@ -218,15 +219,14 @@ std::vector<AggregatedStats> StatsPersistence::loadHistoryRange(
         stats.total_packets = sqlite3_column_int64(stmt, 2);
 
         // Protocl breakdown
-        stats.procotol_bytes["TCP"] = sqlite3_column_int64(stmt, 3);
-        stats.procotol_bytes["UDP"] = sqlite3_column_int64(stmt, 4);
-        stats.procotol_bytes["ICMP"] = sqlite3_column_int64(stmt, 5);
-        stats.procotol_bytes["OTHER"] = sqlite3_column_int64(stmt, 6);
-
-        stats.procotol_packets["TCP"] = sqlite3_column_int64(stmt, 7);
-        stats.procotol_packets["UDP"] = sqlite3_column_int64(stmt, 8);
-        stats.procotol_packets["ICMP"] = sqlite3_column_int64(stmt, 9);
-        stats.procotol_packets["OTHER"] = sqlite3_column_int64(stmt, 10);
+        stats.protocol_bytes[6] = sqlite3_column_int64(stmt, 3);   // TCP
+        stats.protocol_bytes[17] = sqlite3_column_int64(stmt, 4);  // UDP
+        stats.protocol_bytes[1] = sqlite3_column_int64(stmt, 5);   // ICMP
+        stats.protocol_bytes[0] = sqlite3_column_int64(stmt, 6);   // OTHER
+        stats.protocol_packets[6] = sqlite3_column_int64(stmt, 7);
+        stats.protocol_packets[17] = sqlite3_column_int64(stmt, 8);
+        stats.protocol_packets[1] = sqlite3_column_int64(stmt, 9);
+        stats.protocol_packets[0] = sqlite3_column_int64(stmt, 10);
 
         result.push_back(stats);
     }
