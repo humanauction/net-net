@@ -192,7 +192,6 @@ void NetMonDaemon::run() {
     running_.store(true);
     log("info", "NetMonDaemon is running...");
     
-    // Start packet capture
     std::thread capture_thread([this]() {
         try {
             pcap_->startCapture([this](const PacketMeta& meta, const uint8_t* data, size_t len) {
@@ -206,7 +205,6 @@ void NetMonDaemon::run() {
         }
     });
 
-    // Daily cleanup job
     std::thread cleanup_thread([this]() {
         while (running_.load()) {
             // calc: time unitl next midnight UTC
@@ -236,25 +234,19 @@ void NetMonDaemon::run() {
             persistence_->cleanupOldRecords(7);
         }
     });
-    
-    // Start API server
+
     startServer();
 
-    // Live mode: keep server running until stop() is called
     log("info", "API server ready...");
     while (running_.load()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // Cleanup
     log("info", "Daemon shutting down...");
-        // Wait for capture to complete
-    if (capture_thread.joinable()) {
-        capture_thread.join();
-    }
-
+    if (capture_thread.joinable()) capture_thread.join();
+    if (cleanup_thread.joinable()) cleanup_thread.join();
     stopServer();
-    running_.store(false);
+    // running_.store(false); // Not needed, handled by stop()
 }
 
 // ===================================================================
@@ -262,7 +254,6 @@ void NetMonDaemon::run() {
 // ===================================================================
 
 void NetMonDaemon::setupApiRoutes() {
-    // GET /metrics - Current stats
     svr_.Get("/metrics", [this](const httplib::Request& req, httplib::Response& res) {
         if (!isAuthorized(req)) {
             logAuthFailure(req);
@@ -339,30 +330,17 @@ void NetMonDaemon::setupApiRoutes() {
         res.set_content(oss.str(), "application/json");
     });
 
-    // POST /login - Authenticate and create session
     svr_.Post("/login", [this](const httplib::Request& req, httplib::Response& res) {
         try {
-            nlohmann::json json_body;
-            try {
-                json_body = nlohmann::json::parse(req.body);
-            } catch (const nlohmann::json::parse_error& e) {
-                log("warn", "Malformed JSON in login request: " + std::string(e.what()));
-                res.status = 400;
-                res.set_content("{\"error\":\"malformed JSON\"}", "application/json");
-                return;
-            }
-            
-            std::string username = json_body.value("username", "");
-            std::string password = json_body.value("password", "");
-            
+            auto j = nlohmann::json::parse(req.body);
+            std::string username = j.value("username", "");
+            std::string password = j.value("password", "");
             if (username.empty() || password.empty()) {
                 log("warn", "Login attempt with missing credentials");
                 res.status = 400;
                 res.set_content("{\"error\":\"missing username or password\"}", "application/json");
                 return;
             }
-
-            // Validate credentials
             auto it = user_credentials_.find(username);
             if (it == user_credentials_.end()) {
                 log("warn", "User does not exist: " + username);
@@ -370,29 +348,26 @@ void NetMonDaemon::setupApiRoutes() {
                 res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
                 return;
             }
-
-            // Verify password against bcrypt hash
             if (!bcrypt::verify(password, it->second)) {
                 log("warn", "Login attempt failed for: " + username);
                 res.status = 401;
                 res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
                 return;
             }
-
-            // Create session
             std::string client_ip = req.remote_addr;
             std::string token = session_manager_->createSession(username, client_ip);
-
             log("info", "User logged in: " + username + " from " + client_ip);
-
-            std::ostringstream oss;
-            oss << "{";
-            oss << "\"token\":\"" << token << "\",";
-            oss << "\"username\":\"" << username << "\",";
-            oss << "\"expires_in\":" << session_expiry_;
-            oss << "}";
-
-            res.set_content(oss.str(), "application/json");
+            nlohmann::json resp = {
+                {"token", token},
+                {"username", username},
+                {"expires_in", session_expiry_}
+            };
+            res.set_content(resp.dump(), "application/json");
+        } catch (const nlohmann::json::parse_error&) {
+            log("warn", "Malformed JSON in login request");
+            res.status = 400;
+            res.set_content("{\"error\":\"malformed JSON\"}", "application/json");
+            return;
         } catch (const std::exception& ex) {
             log("error", "Login request processing failed: " + std::string(ex.what()));
             res.status = 500;
@@ -400,7 +375,6 @@ void NetMonDaemon::setupApiRoutes() {
         }
     });
 
-    // POST /logout - Invalidate session
     svr_.Post("/logout", [this](const httplib::Request& req, httplib::Response& res) {
         auto session_token = req.get_header_value("X-Session-Token");
         
@@ -421,7 +395,6 @@ void NetMonDaemon::setupApiRoutes() {
         }
     });
 
-    // POST /control/start - Start capture
     svr_.Post("/control/start", [this](const httplib::Request& req, httplib::Response& res) {
         if (!isAuthorized(req)) {
             logAuthFailure(req);
@@ -437,11 +410,10 @@ void NetMonDaemon::setupApiRoutes() {
             return;
         }
         last = now;
-        running_ = true;
+        running_.store(true); // Use atomic store
         res.set_content("{\"status\":\"started\"}", "application/json");
     });
 
-    // POST /control/stop - Stop capture
     svr_.Post("/control/stop", [this](const httplib::Request& req, httplib::Response& res) {
         if (!isAuthorized(req)) {
             logAuthFailure(req);
@@ -457,11 +429,10 @@ void NetMonDaemon::setupApiRoutes() {
             return;
         }
         last = now;
-        running_ = false;
+        stop(); // Only stop via explicit API
         res.set_content("{\"status\":\"stopped\"}", "application/json");
     });
 
-    // POST /control/reload - Reload config
     svr_.Post("/control/reload", [this](const httplib::Request& req, httplib::Response& res) {
         // Check auth + rate limit
         if (!checkRateLimit(req, res, "/control/reload")) {
@@ -589,7 +560,7 @@ void NetMonDaemon::setupApiRoutes() {
             window["protocol_breakdown"] = proto_breakdown;  
             
             // active flows not stored in historical data (too large)
-            window["acvtive_flows"] = nlohmann::json::array();
+            window["active_flows"] = nlohmann::json::array();
 
             windows.push_back(window);
 
@@ -626,9 +597,7 @@ void NetMonDaemon::startServer() {
 void NetMonDaemon::stopServer() {
     log("info", "Stopping API server...");
     svr_.stop();
-    if (api_thread_.joinable()) {
-        api_thread_.join();
-    }
+    if (api_thread_.joinable()) api_thread_.join();
 }
 
 // ===================================================================
@@ -685,16 +654,13 @@ bool NetMonDaemon::checkRateLimit(const httplib::Request& req, httplib::Response
 }
 
 void NetMonDaemon::stop() {
-    if (!running_.load()) return;
+    if (!running_.exchange(false)) {
+        log("warn", "NetMonDaemon is already stopped");
+        return;
+    }
     
     log("info", "NetMonDaemon is stopping...");
-    running_.store(false);
-    
-    // stop capture
-    if (pcap_) {
-        pcap_->stopCapture();
-    }
-
+    if (pcap_) pcap_->stopCapture();
 }
 
 void NetMonDaemon::logAuthFailure(const httplib::Request& req) const {

@@ -26,31 +26,41 @@ protected:
     std::string session_token;    
 
     void SetUp() override {
-        // Create YAML config in memory (no file I/O!)
-        YAML::Node config = createTestConfigNode();  // ✅ CAPTURE THE RETURN VALUE
-    
-        // Create daemon with in-memory config
-        daemon = std::make_unique<NetMonDaemon>(config, "test-daemon-config");  // ✅ PASS YAML::Node
-    
-        // Start daemon in background thread
-        daemon_thread = std::thread([this]() {
-            daemon->run();
-        });
-    
-        // Wait for daemon to be ready
-        bool ready = false;
-        for (int i = 0; i < 50; ++i) {
-            httplib::Client client(test_host, test_port);
-            client.set_connection_timeout(1, 0);
-            auto res = client.Post("/login");
-            if (res && (res->status == 400 || res->status == 401)) {
-                ready = true;
-                break;
+        try {
+            // Create YAML config in memory (no file I/O!)
+            YAML::Node config = createTestConfigNode();
+
+            // Create daemon with in-memory config
+            daemon = std::make_unique<NetMonDaemon>(config, "test-daemon-config");
+
+            // Start daemon in background thread
+            daemon_thread = std::thread([this]() {
+                try {
+                    daemon->run();
+                } catch (const std::exception& ex) {
+                    std::cerr << "Daemon thread exception: " << ex.what() << std::endl;
+                    throw;
+                }
+            });
+
+            // Wait for daemon to be ready
+            bool ready = false;
+            for (int i = 0; i < 50; ++i) {
+                httplib::Client client(test_host, test_port);
+                client.set_connection_timeout(1, 0);
+                auto res = client.Post("/login", "{}", "application/json");
+                if (res && (res->status == 400 || res->status == 401)) {
+                    ready = true;
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+            ASSERT_TRUE(ready) << "ERROR: Daemon failed to start within 5 seconds";
+        } catch (const std::exception& ex) {
+            std::cerr << "SetUp() exception: " << ex.what() << std::endl;
+            throw;
         }
-    
-        ASSERT_TRUE(ready) << "ERROR: Daemon failed to start within 5 seconds";
     }
 
     void TearDown() override {
@@ -88,8 +98,11 @@ protected:
         config["stats"]["history_depth"] = 3;
         
         // Database config (in-memory SQLite)
-        config["database"]["path"] = ":memory:";
-        
+        // config["database"]["path"] = ":memory:";
+
+        // Use temp file for persistence testing
+        config["database"]["path"] = "test_daemon.db";
+
         // API config
         config["api"]["enabled"] = true;
         config["api"]["host"] = test_host;
@@ -860,4 +873,56 @@ TEST(NetMonDaemonConfigTest, FileBasedDaemonCanReload) {
     std::filesystem::remove(config_path);
     std::filesystem::remove(db_path);
     std::filesystem::remove(db_path + ".sessions");
+}
+
+// Test /metrics/history endpoint 
+TEST_F(NetMonDaemonTest, MetricsHistoryEndpointReturnsValidJSON) {
+    // Wait for at least one stats window to be persisted
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Query /metrics/history for the last 10 minutes
+    int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    int64_t start = now - 600; // 10 minutes ago
+
+    std::string url = "/metrics/history?start=" + std::to_string(start) + "&end=" + std::to_string(now) + "&limit=10";
+    auto res = makeAuthenticatedGet(url);
+
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    EXPECT_EQ(res->get_header_value("Content-Type"), "application/json");
+
+    auto j = json::parse(res->body);
+
+    EXPECT_TRUE(j.contains("start"));
+    EXPECT_TRUE(j.contains("end"));
+    EXPECT_TRUE(j.contains("windows"));
+    EXPECT_TRUE(j["windows"].is_array());
+    // At least one window should be present if stats are being persisted
+    EXPECT_GE(j["windows"].size(), 1);
+
+    // Validate window structure
+    if (!j["windows"].empty()) {
+        auto& w = j["windows"][0];
+        EXPECT_TRUE(w.contains("timestamp"));
+        EXPECT_TRUE(w.contains("window_start"));
+        EXPECT_TRUE(w.contains("total_bytes"));
+        EXPECT_TRUE(w.contains("total_packets"));
+        EXPECT_TRUE(w.contains("bytes_per_second"));
+        EXPECT_TRUE(w.contains("protocol_breakdown"));
+        EXPECT_TRUE(w["protocol_breakdown"].is_object());
+    }
+}
+
+// Test: /metrics/history invalid parameters
+TEST_F(NetMonDaemonTest, MetricsHistoryEndpointRejectsInvalidParams) {
+    // start > end
+    int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::string url = "/metrics/history?start=" + std::to_string(now + 100) + "&end=" + std::to_string(now);
+
+    auto res = makeAuthenticatedGet(url);
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 400);
+
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("error"));
 }
