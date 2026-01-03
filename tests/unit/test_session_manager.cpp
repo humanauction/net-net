@@ -408,12 +408,6 @@ TEST_F(SessionManagerTest, CleanupExpiredRemovesOldButKeepsRecent) {
     unlink(test_db.c_str());
 }
 
-// ❌ REMOVE THESE THREE BROKEN TESTS:
-// - CreateSessionRetriesOnBusyDatabase
-// - CreateSessionThrowsAfterMaxRetries  
-// - ValidateSessionReturnsFalseOnDatabaseError
-
-// ✅ REPLACE WITH THESE WORKING TESTS:
 
 // TEST: createSession with database locked (WAL allows reads during write)
 TEST_F(SessionManagerTest, CreateSessionSucceedsDespiteConcurrentLock) {

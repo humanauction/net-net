@@ -878,7 +878,7 @@ TEST(NetMonDaemonConfigTest, FileBasedDaemonCanReload) {
 // Test /metrics/history endpoint 
 TEST_F(NetMonDaemonTest, MetricsHistoryEndpointReturnsValidJSON) {
     // Wait for at least one stats window to be persisted
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 
     // Query /metrics/history for the last 10 minutes
     int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
