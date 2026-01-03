@@ -182,56 +182,90 @@ std::vector<AggregatedStats> StatsPersistence::loadHistoryRange(
 ) {
     std::vector<AggregatedStats> result;
 
-    // Build SQL query with time-range filter
     std::string sql = R"(
-        SELECT
-            window_start, total_bytes, total_packets, 
-            tcp_bytes, udp_bytes, icmp_bytes, other_bytes,
-            tcp_packets, udp_packets, icmp_packets, other_packets
-        FROM agg_stats
-        WHERE window_start BETWEEN ? AND ?
-        ORDER BY window_start DESC
-        LIMIT ?
+        WITH selected AS (
+            SELECT DISTINCT window_start
+            FROM agg_stats
+            WHERE window_start BETWEEN ? AND ?
+            ORDER BY window_start DESC
+            LIMIT ?
+        )
+        SELECT a.window_start, a.iface, a.protocol, a.src_ip, a.src_port, a.dst_ip, a.dst_port,
+               a.pkts_c2s, a.pkts_s2c, a.bytes_c2s, a.bytes_s2c
+        FROM agg_stats a
+        JOIN selected s ON a.window_start = s.window_start
+        ORDER BY a.window_start DESC
     )";
 
     sqlite3_stmt* stmt = nullptr;
     int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
 
     if (rc != SQLITE_OK) {
-        std::cerr << "[StatsPersistence] Failed to prepare range query: " 
+        std::cerr << "[StatsPersistence] Failed to prepare range query: "
                   << sqlite3_errmsg(db_) << std::endl;
         return result;
     }
 
-    // Bind params
     sqlite3_bind_int64(stmt, 1, start_timestamp);
     sqlite3_bind_int64(stmt, 2, end_timestamp);
     sqlite3_bind_int64(stmt, 3, static_cast<int64_t>(limit));
 
-    // Execute and collect results
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        AggregatedStats stats;
+    std::map<int64_t, AggregatedStats, std::greater<int64_t>> windows;
 
-        int64_t ts = sqlite3_column_int64(stmt, 0);
-        stats.window_start = std::chrono::system_clock::from_time_t(ts);
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        int64_t window_start = sqlite3_column_int64(stmt, 0);
+        std::string iface = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        int protocol = sqlite3_column_int(stmt, 2);
+        std::string src_ip = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        int src_port = sqlite3_column_int(stmt, 4);
+        std::string dst_ip = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+        int dst_port = sqlite3_column_int(stmt, 6);
+        int pkts_c2s = sqlite3_column_int(stmt, 7);
+        int pkts_s2c = sqlite3_column_int(stmt, 8);
+        int bytes_c2s = sqlite3_column_int(stmt, 9);
+        int bytes_s2c = sqlite3_column_int(stmt, 10);
 
-        stats.total_bytes = sqlite3_column_int64(stmt, 1);
-        stats.total_packets = sqlite3_column_int64(stmt, 2);
+        FlowKey key{
+            iface,
+            static_cast<uint8_t>(protocol),
+            src_ip,
+            static_cast<uint16_t>(src_port),
+            dst_ip,
+            static_cast<uint16_t>(dst_port)
+        };
+        FlowStats fs;
+        fs.pkts_c2s = pkts_c2s;
+        fs.pkts_s2c = pkts_s2c;
+        fs.bytes_c2s = bytes_c2s;
+        fs.bytes_s2c = bytes_s2c;
 
-        // Protocl breakdown
-        stats.protocol_bytes[6] = sqlite3_column_int64(stmt, 3);   // TCP
-        stats.protocol_bytes[17] = sqlite3_column_int64(stmt, 4);  // UDP
-        stats.protocol_bytes[1] = sqlite3_column_int64(stmt, 5);   // ICMP
-        stats.protocol_bytes[0] = sqlite3_column_int64(stmt, 6);   // OTHER
-        stats.protocol_packets[6] = sqlite3_column_int64(stmt, 7);
-        stats.protocol_packets[17] = sqlite3_column_int64(stmt, 8);
-        stats.protocol_packets[1] = sqlite3_column_int64(stmt, 9);
-        stats.protocol_packets[0] = sqlite3_column_int64(stmt, 10);
-
-        result.push_back(stats);
+        auto& agg = windows[window_start];
+        agg.window_start = std::chrono::system_clock::time_point(std::chrono::seconds(window_start));
+        agg.flows[key] = fs;
     }
-
     sqlite3_finalize(stmt);
+
+    // Aggregate totals for each window
+    for (auto& [window_start, agg] : windows) {
+        uint64_t total_bytes = 0, total_packets = 0;
+        std::unordered_map<uint8_t, uint64_t> proto_bytes;
+        std::unordered_map<uint8_t, uint64_t> proto_packets;
+
+        for (const auto& [key, fs] : agg.flows) {
+            uint64_t bytes = fs.bytes_c2s + fs.bytes_s2c;
+            uint64_t packets = fs.pkts_c2s + fs.pkts_s2c;
+            total_bytes += bytes;
+            total_packets += packets;
+            proto_bytes[key.protocol] += bytes;
+            proto_packets[key.protocol] += packets;
+        }
+        agg.total_bytes = total_bytes;
+        agg.total_packets = total_packets;
+        agg.protocol_bytes = proto_bytes;
+        agg.protocol_packets = proto_packets;
+
+        result.push_back(std::move(agg));
+    }
     return result;
 }
 
