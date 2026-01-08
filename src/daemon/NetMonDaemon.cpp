@@ -238,15 +238,22 @@ void NetMonDaemon::run() {
     startServer();
 
     log("info", "API server ready...");
+    if (capture_thread.joinable()) capture_thread.join();
+
+    if (opts_.read_offline) {
+        persistence_->saveWindow(aggregator_->currentStats());
+        aggregator_->advanceWindow();
+        log("info", "Offline mode: forced stats window persisted after capture.");
+    }
+
+    // Now keep API running until told to stop
     while (running_.load()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     log("info", "Daemon shutting down...");
-    if (capture_thread.joinable()) capture_thread.join();
     if (cleanup_thread.joinable()) cleanup_thread.join();
     stopServer();
-    // running_.store(false); // Not needed, handled by stop()
 }
 
 // ===================================================================

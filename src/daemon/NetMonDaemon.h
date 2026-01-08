@@ -59,7 +59,7 @@ private:
     std::unique_ptr<StatsAggregator> aggregator_;
     std::unique_ptr<StatsPersistence> persistence_;
     httplib::Server svr_;
-    std::string log_file_;   
+    std::string log_file_;
     std::string log_level_;
     bool log_timestamps_ = true;
     std::unique_ptr<SessionManager> session_manager_;

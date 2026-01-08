@@ -95,11 +95,7 @@ std::vector<AggregatedStats> StatsAggregator::history() const {
 }
 
 const AggregatedStats& StatsAggregator::currentStats() const {
-    if (impl_->count == 0) {
-        return impl_->current;
-    }
-    size_t last_window = (impl_->head + impl_->history_depth - 1) % impl_->history_depth;
-    return impl_->stats_history[last_window];
+    return impl_->current;
 }
 
 void StatsAggregator::ingest(const ParsedPacket& packet) {
