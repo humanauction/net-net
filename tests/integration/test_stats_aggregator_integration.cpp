@@ -36,7 +36,9 @@ TEST(StatsAggregatorIntegrationTest, AggregatesSyntheticFlows) {
     }
 
     agg.advanceWindow();
-    const AggregatedStats& stats = agg.currentStats();
+    const auto& history = agg.history();
+    ASSERT_FALSE(history.empty()) << "No history available after advancing window";
+    const AggregatedStats& stats = history.back();
 
     // Verify the flow was aggregated
     FlowKey key;
@@ -87,7 +89,9 @@ TEST(StatsAggregatorIntegrationTest, AggregatesPcapReplay) {
     pcap_close(handle);
 
     agg.advanceWindow();
-    const AggregatedStats& stats = agg.currentStats();
+    const auto& history = agg.history();
+    ASSERT_FALSE(history.empty()) << "No history available after advancing window";
+    const AggregatedStats& stats = history.back();
     
     // Just verify we parsed something
     ASSERT_GT(packet_count, 0) << "No packets were parsed from pcap file";
