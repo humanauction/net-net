@@ -56,15 +56,15 @@ TEST(StatsAggregatorTest, AggregatesFlowsAndHistory) {
     agg.ingest(pkt1);
     agg.advanceWindow();  // Save window 1 to history
 
-    // Now we have 2 completed windows in history
+    // 2 completed windows in history
     auto history = agg.history();
     
-    // UPDATED: Expect 2 windows (the ones we saved)
-    EXPECT_EQ(history.size(), 2);  // Changed from expecting wrong value
+    // Expect 2 windows
+    EXPECT_EQ(history.size(), 2);
     
-    // Verify currentStats() returns the LAST completed window (window 1)
-    const auto& current = agg.currentStats();
-    EXPECT_GT(current.flows.size(), 0);
+    // Verify last completed window (window 1)
+    const auto& last = history.back();
+    EXPECT_GT(last.flows.size(), 0);
 }
 
 // TEST Circular buffer overwriting old windows

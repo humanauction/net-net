@@ -207,7 +207,7 @@ void NetMonDaemon::run() {
 
     std::thread cleanup_thread([this]() {
         while (running_.load()) {
-            // calc: time unitl next midnight UTC
+            // calc: time until next midnight UTC
             auto now = std::chrono::system_clock::now();
             auto now_t = std::chrono::system_clock::to_time_t(now);
             std::tm* now_tm = std::gmtime(&now_t);
@@ -246,7 +246,7 @@ void NetMonDaemon::run() {
         log("info", "Offline mode: forced stats window persisted after capture.");
     }
 
-    // Now keep API running until told to stop
+    // API running until told to stop
     while (running_.load()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -417,7 +417,7 @@ void NetMonDaemon::setupApiRoutes() {
             return;
         }
         last = now;
-        running_.store(true); // Use atomic store
+        running_.store(true); // atomic store
         res.set_content("{\"status\":\"started\"}", "application/json");
     });
 
@@ -443,7 +443,7 @@ void NetMonDaemon::setupApiRoutes() {
     svr_.Post("/control/reload", [this](const httplib::Request& req, httplib::Response& res) {
         // Check auth + rate limit
         if (!checkRateLimit(req, res, "/control/reload")) {
-            return;  // Response already set by checkRateLimit()
+            return;
         }
 
         // Check if using in-memory config
@@ -640,7 +640,7 @@ bool NetMonDaemon::isAuthorized(const httplib::Request& req) {
 }
 
 bool NetMonDaemon::checkRateLimit(const httplib::Request& req, httplib::Response& res, const std::string& endpoint) {
-    // Check authorization first
+    // Check authorization
     if (!isAuthorized(req)) {
         logAuthFailure(req);
         res.status = 401;
@@ -648,7 +648,7 @@ bool NetMonDaemon::checkRateLimit(const httplib::Request& req, httplib::Response
         return false;
     }
 
-    // Then check rate limit
+    // check rate limit
     auto now = std::chrono::steady_clock::now();
     auto& last = last_control_request_[endpoint];
     if (now - last < control_rate_limit_) {

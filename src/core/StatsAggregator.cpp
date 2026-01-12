@@ -1,12 +1,10 @@
 #include "core/StatsAggregator.h"
 #include "core/Parser.h"
-
 #include <algorithm>
 #include <arpa/inet.h>
 #include <array>
 #include <cstring>
 #include <tuple>
-
 
 namespace {
 
@@ -148,4 +146,14 @@ void StatsAggregator::ingest(const ParsedPacket& packet) {
         }
     }
 
+    // Protocol breakdown (by protocol number)
+    uint8_t proto = packet.transport.protocol;
+
+    impl_->current.protocol_bytes[proto] += packet.meta.cap_len;
+    impl_->current.protocol_packets[proto] += 1;
+
+    // Update totals
+    impl_->current.total_bytes +=  packet.meta.cap_len;
+    impl_->current.total_packets +=1; 
+    
 }
