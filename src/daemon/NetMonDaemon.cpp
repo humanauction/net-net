@@ -241,8 +241,8 @@ void NetMonDaemon::run() {
     if (capture_thread.joinable()) capture_thread.join();
 
     if (opts_.read_offline) {
-        persistence_->saveWindow(aggregator_->currentStats());
         aggregator_->advanceWindow();
+        persistence_->saveWindow(aggregator_->history().back());
         log("info", "Offline mode: forced stats window persisted after capture.");
     }
 

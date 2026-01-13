@@ -20,8 +20,8 @@ interface:
 
 # Offline Capture Mode (optional)
 # Uncomment to read from pcap file instead of live capture
-# offline:
-#   file: "/Users/guns4kids/Documents/vscode-projects/net-net/tests/fixtures/icmp_sample.pcap"
+offline:
+  file: "/Users/guns4kids/Documents/vscode-projects/net-net/tests/fixtures/icmp_sample.pcap"
 
 # BPF Filter (Berkeley Packet Filter)
 # Syntax: https://www.tcpdump.org/manpages/pcap-filter.7.html
