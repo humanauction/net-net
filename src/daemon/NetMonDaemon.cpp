@@ -197,6 +197,7 @@ void NetMonDaemon::run() {
             pcap_->startCapture([this](const PacketMeta& meta, const uint8_t* data, size_t len) {
                 ParsedPacket pkt;
                 if (parsePacket(data, len, meta, pkt)) {
+                    std::cerr << "[DEBUG] Parsed packet: " << pkt.network.src_ip << " -> " << pkt.network.dst_ip << std::endl;
                     aggregator_->ingest(pkt);
                     std::cerr << "[DEBUG] Ingested packet at " << pkt.meta.timestamp.time_since_epoch().count() << std::endl;
                 }

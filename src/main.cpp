@@ -3,6 +3,7 @@
 #include <csignal>
 #include <atomic>
 #include <thread>
+#include <cstdlib>
 
 std::atomic<bool> running{true};
 
@@ -19,7 +20,8 @@ void print_usage(const char* prog_name) {
               << "  -f FILTER       BPF filter expression\n"
               << "  -s SNAPLEN      Snapshot length (default: 65535)\n"
               << "  -p              Enable promiscuous mode\n"
-              << "  -h              Show this help message\n\n"
+              << "  -h              Show this help message\n"
+              << "  --no-signals    Disable signal handling (for tests)\n\n"
               << "Examples:\n"
               << "  " << prog_name << " -i en0                    # Capture from en0\n"
               << "  " << prog_name << " -i en0 -f \"tcp port 80\"   # Capture HTTP traffic\n"
@@ -28,13 +30,15 @@ void print_usage(const char* prog_name) {
 
 int main(int argc, char* argv[]) {
     PcapAdapter::Options opts;
-    opts.promiscuous = false;
+    // Use struct defaults: promiscuous=true, snaplen=65535, etc.
     bool offline_mode = false;
-    
+    bool enable_signals = true;
+    int offline_packet_limit = -1; // -1 means no limit
+
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
-        
+
         if (arg == "-h" || arg == "--help") {
             print_usage(argv[0]);
             return 0;
@@ -50,68 +54,69 @@ int main(int argc, char* argv[]) {
             opts.snaplen = std::stoi(argv[++i]);
         } else if (arg == "-p") {
             opts.promiscuous = true;
+        } else if (arg == "--no-signals") {
+            enable_signals = false;
+        } else if (arg == "--offline-limit" && i + 1 < argc) {
+            offline_packet_limit = std::stoi(argv[++i]);
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             print_usage(argv[0]);
             return 1;
         }
     }
-    
-    // Default to loopback if no interface specified
+
+    // Default to loopback if no interface or file specified
     if (opts.iface_or_file.empty()) {
         opts.iface_or_file = "lo0";
         std::cout << "No interface specified, using default: lo0" << std::endl;
     }
-    
+
     opts.read_offline = offline_mode;
-    
-    // Setup signal handler
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
-    
+
+    // Setup signal handler unless disabled (for tests)
+    if (enable_signals) {
+        signal(SIGINT, signal_handler);
+        signal(SIGTERM, signal_handler);
+    }
+
     try {
         PcapAdapter adapter(opts);
-        
+
         std::cout << "Starting capture from: " << adapter.source() << std::endl;
         if (!opts.bpf_filter.empty()) {
             std::cout << "BPF Filter: " << opts.bpf_filter << std::endl;
         }
-        
+
         uint64_t packet_count = 0;
+        bool stop_requested = false;
         adapter.startCapture([&](const PacketMeta& meta, const uint8_t* data, size_t len) {
             packet_count++;
-            
+
             // Print packet summary every 100 packets
             if (packet_count % 100 == 0) {
                 std::cout << "Captured " << packet_count << " packets..." << std::endl;
             }
-            
-            // For offline mode, stop after processing all packets
-            if (offline_mode && packet_count >= 1000) {
+
+            // For offline mode, stop after processing all packets or limit
+            if (offline_mode && offline_packet_limit > 0 && packet_count >= static_cast<uint64_t>(offline_packet_limit)) {
                 running.store(false);
+                stop_requested = true;
             }
         });
-        
+
         // Main loop
-        if (offline_mode) {
-            // Offline mode: wait for processing to complete
-            while (running.load()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));  
-            }    
-        } else {
-            // Live capture: run until interrupted
-            while (running.load()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
+        while (running.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (offline_mode && stop_requested) break;
         }
-        
+
         adapter.stopCapture();
         std::cout << "\nTotal packets captured: " << packet_count << std::endl;
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-    
+
     return 0;
 }
