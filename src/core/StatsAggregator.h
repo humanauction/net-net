@@ -42,6 +42,7 @@ private:
         std::vector<AggregatedStats> stats_history;
         size_t head = 0;
         AggregatedStats current;
+        std::chrono::system_clock::time_point last_packet_ts;
     };
     std::unique_ptr<Impl> impl_;
 };

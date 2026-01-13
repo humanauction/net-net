@@ -198,6 +198,7 @@ void NetMonDaemon::run() {
                 ParsedPacket pkt;
                 if (parsePacket(data, len, meta, pkt)) {
                     aggregator_->ingest(pkt);
+                    std::cerr << "[DEBUG] Ingested packet at " << pkt.meta.timestamp.time_since_epoch().count() << std::endl;
                 }
             });
         } catch (const std::exception& ex) {

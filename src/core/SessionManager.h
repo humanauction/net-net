@@ -11,7 +11,7 @@ std::string token;
 std::string username;
 std::chrono::system_clock::time_point created_at;
 std::chrono::system_clock::time_point last_activity;
-std::string ip_address;    
+std::string ip_address;
 };
 
 class SessionManager {

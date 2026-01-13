@@ -104,6 +104,9 @@ void StatsPersistence::saveWindow(const AggregatedStats& stats) {
     }
     sqlite3_finalize(stmt);
     sqlite3_exec(db_, "END TRANSACTION;", nullptr, nullptr, nullptr);
+
+    std::cerr << "[DEBUG] saveWindow: flows=" << stats.flows.size() << ", window_start=" << std::chrono::duration_cast<std::chrono::seconds>(stats.window_start.time_since_epoch()).count() << std::endl;
+    
 }
 
 std::vector<AggregatedStats> StatsPersistence::loadHistory(size_t max_windows) {

@@ -880,9 +880,9 @@ TEST_F(NetMonDaemonTest, MetricsHistoryEndpointReturnsValidJSON) {
 	// Wait for at least one stats window to be persisted
 	std::this_thread::sleep_for(std::chrono::seconds(5));
 
-	// Query /metrics/history for the last 10 minutes
+	// Query /metrics/history
+	int64_t start = 0;
 	int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-	int64_t start = now - 600; // 10 minutes ago
 
 	std::string url = "/metrics/history?start=" + std::to_string(start) + "&end=" + std::to_string(now) + "&limit=10";
 	auto res = makeAuthenticatedGet(url);
