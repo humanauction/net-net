@@ -557,7 +557,11 @@ void NetMonDaemon::setupApiRoutes() {
             for (const auto& [proto, bytes] : stats.protocol_bytes) {
                 total_bytes += bytes;
             }
-            window["bytes_per_second"] = total_bytes / 60;
+
+            auto window_duration = std::chrono::duration_cast<std::chrono::seconds>(
+                stats.window_end - stats.window_start).count();
+            if (window_duration <= 0) window_duration = 60; // prevent div by zero
+            window["bytes_per_second"] = total_bytes / window_duration;
 
             // Protocol breakdown
             nlohmann::json proto_breakdown;
