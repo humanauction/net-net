@@ -9,6 +9,7 @@
 // Aggregated stats for a time window
 struct AggregatedStats {
     std::chrono::system_clock::time_point window_start;
+    std::chrono::seconds window_size;
     std::unordered_map<FlowKey, FlowStats> flows;
     // TODO Add more fields here (e.g. totals, protocol breakdown)
     // total bytes, packets

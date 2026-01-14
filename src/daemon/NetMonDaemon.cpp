@@ -558,8 +558,10 @@ void NetMonDaemon::setupApiRoutes() {
                 total_bytes += bytes;
             }
 
-            auto window_duration = std::chrono::duration_cast<std::chrono::seconds>(
-                stats.window_end - stats.window_start).count();
+            int window_duration = 60; // default fallback
+            if (stats.window_size > std::chrono::seconds(0)) {
+                window_duration = static_cast<int>(stats.window_size.count());
+            }
             if (window_duration <= 0) window_duration = 60; // prevent div by zero
             window["bytes_per_second"] = total_bytes / window_duration;
 
