@@ -263,7 +263,20 @@ void NetMonDaemon::run() {
 // ===================================================================
 
 void NetMonDaemon::setupApiRoutes() {
-    svr_.Get("/metrics", [this](const httplib::Request& req, httplib::Response& res) {
+    auto add_cors = [](httplib::Response& res) {
+        res.set_header("Access-Control-Allow-Origin", "*");
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, X-Session-Token, Authorization");
+    };
+
+    // Handle preflight for all routes
+    svr_.Options(R"(.*)", [add_cors](const httplib::Request& /*req*/, httplib::Response& res) {
+        add_cors(res);
+        res.status = 204;
+    });
+
+    svr_.Get("/metrics", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
         if (!isAuthorized(req)) {
             logAuthFailure(req);
             res.status = 401;
@@ -339,7 +352,8 @@ void NetMonDaemon::setupApiRoutes() {
         res.set_content(oss.str(), "application/json");
     });
 
-    svr_.Post("/login", [this](const httplib::Request& req, httplib::Response& res) {
+    svr_.Post("/login", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
         try {
             auto j = nlohmann::json::parse(req.body);
             std::string username = j.value("username", "");
@@ -384,7 +398,8 @@ void NetMonDaemon::setupApiRoutes() {
         }
     });
 
-    svr_.Post("/logout", [this](const httplib::Request& req, httplib::Response& res) {
+    svr_.Post("/logout", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
         auto session_token = req.get_header_value("X-Session-Token");
         
         if (session_token.empty()) {
@@ -404,7 +419,8 @@ void NetMonDaemon::setupApiRoutes() {
         }
     });
 
-    svr_.Post("/control/start", [this](const httplib::Request& req, httplib::Response& res) {
+    svr_.Post("/control/start", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
         if (!isAuthorized(req)) {
             logAuthFailure(req);
             res.status = 401;
@@ -423,7 +439,8 @@ void NetMonDaemon::setupApiRoutes() {
         res.set_content("{\"status\":\"started\"}", "application/json");
     });
 
-    svr_.Post("/control/stop", [this](const httplib::Request& req, httplib::Response& res) {
+    svr_.Post("/control/stop", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
         if (!isAuthorized(req)) {
             logAuthFailure(req);
             res.status = 401;
@@ -442,7 +459,8 @@ void NetMonDaemon::setupApiRoutes() {
         res.set_content("{\"status\":\"stopped\"}", "application/json");
     });
 
-    svr_.Post("/control/reload", [this](const httplib::Request& req, httplib::Response& res) {
+    svr_.Post("/control/reload", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
         // Check auth + rate limit
         if (!checkRateLimit(req, res, "/control/reload")) {
             return;
@@ -474,7 +492,8 @@ void NetMonDaemon::setupApiRoutes() {
         }
     });
 
-    svr_.Get("/metrics/history", [this](const httplib::Request& req, httplib::Response& res) {
+    svr_.Get("/metrics/history", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+        add_cors(res);
         if (!isAuthorized(req)) {
             logAuthFailure(req);
             res.status = 401;

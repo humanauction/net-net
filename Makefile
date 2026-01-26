@@ -139,6 +139,10 @@ clean:
 	@rm -rf "$(BUILD_DIR)"
 	@rm -f "$(CONFIG_CI)"
 
+back:
+	@echo "starting backend server..."
+	@cd www && python3 -m http.server 8083
+
 .PHONY: all activate venv config-ci build rebuild \
 	run-daemon-online run-daemon-offline test test-cpp test-python \
 	coverage coverage-html clean clean-coverage remove-vendor-coverage rebuild-coverage
