@@ -5,7 +5,7 @@
 interface:
     # Interface to capture from (e.g., en0, eth0, wlan0)
     # Use "any" to capture from all interfaces (Linux only)
-    name: "${NETNET_IFACE}" # or "lo0" for localhost
+    name: "lo0" # or "lo0" for localhost
 
     # Promiscuous mode: capture all packets on the network segment
     promiscuous: true
@@ -49,7 +49,7 @@ filter:
     # bpf: "not tcp port 22"
 
     # No filter (capture everything)
-    bpf_filter: ""
+    # bpf_filter: ""
 
 # Connection Tracking
 tracking:
@@ -102,8 +102,8 @@ logging:
 # Security
 privilege:
     drop: true
-    user: "${NETNET_USER}"
-    group: "${NETNET_GROUP}"
+    user: "nobody"
+    group: "nobody"
 
 # User Credentials (DEVELOPMENT ONLY - passwords are plaintext)
 # In production, store bcrypt-hashed passwords and load from secure secrets manager
@@ -114,7 +114,7 @@ users:
       password: "10000$133d6487d65d3e218173650ff5d6f962$7661cac9078ff1a92db656227bb2cad8fa15cf043672395c300ea3b0ee183836" # TODO: Replace with bcrypt hash in production
       plaintext: "adminpass" # For testing only
     - username: "user"
-      password: "10000$cc5a04764424a54967c5489a8adb1524$5936ff5a2a291c5d49914404eebbf120a56f6ade9f79d6bd34e71b3dd32f4405" # TODO: Replace with bcrypt hash in production
+      password: "10000$5936ff5a2a291c5d49914404eebbf120a56f6ade9f79d6bd34e71b3dd32f4405" # TODO: Replace with bcrypt hash in production
       plaintext: "userpass" # For testing only
 
 # Performance Tuning

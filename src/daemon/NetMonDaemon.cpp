@@ -28,7 +28,7 @@
 
 // In-memory constructor (testing use)
 NetMonDaemon::NetMonDaemon(const YAML::Node& config, const std::string& config_name)
-    : config_path_(""), config_name_(config_name), running_(false)  // ✅ INITIALIZE config_name_
+    : config_path_(""), config_name_(config_name), running_(false)  // INITIALIZE config_name_
 {
     log("info", "Loading configuration from memory: " + config_name);
     initializeFromConfig(config);
@@ -36,7 +36,7 @@ NetMonDaemon::NetMonDaemon(const YAML::Node& config, const std::string& config_n
 
 // File-based constructor (production use)
 NetMonDaemon::NetMonDaemon(const std::string& config_path)
-    : config_path_(config_path), config_name_(""), running_(false)  // ✅ INITIALIZE config_name_ (empty for file-based)
+    : config_path_(config_path), config_name_(""), running_(false)  // INITIALIZE config_name_ (empty for file-based)
 {
     log("info", "Loading configuration from: " + config_path);
     
