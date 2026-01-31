@@ -38,9 +38,10 @@ else
 endif
 
 # Environment variables for CI config
-NETNET_IFACE ?= lo0
+NETNET_IFACE ?= en0
 NETNET_USER ?= nobody
 NETNET_GROUP ?= nobody
+NETNET_BPF_FILTER ?=
 
 .DEFAULT_GOAL := all
 

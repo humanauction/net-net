@@ -18,7 +18,7 @@ interface:
     # How long to wait before processing buffered packets
     timeout_ms: 1000
 
-    bpf_filter: ""
+    bpf_filter: "${NETNET_BPF_FILTER}"
 
 # Offline Capture Mode (optional)
 # Uncomment to read from pcap file instead of live capture
@@ -27,35 +27,33 @@ interface:
 
 # BPF Filter (Berkeley Packet Filter)
 # Syntax: https://www.tcpdump.org/manpages/pcap-filter.7.html
-filter:
-    # Example filters (uncomment one):
+# Example filters
 
     # Capture only icmp traffic
-    # bpf: "icmp"
+    # bpf_filter: "icmp"
 
     # Capture only TCP traffic
-    # bpf: "tcp"
+    # bpf_filter: "tcp"
 
     # Capture HTTP traffic (ports 80 and 443)
-    # bpf: "tcp port 80 or tcp port 443"
+    # bpf_filter: "tcp port 80 or tcp port 443"
 
     # Capture traffic to/from specific IP
-    # bpf: "host 192.168.1.1"
-    # bpf_filter: "host 192.168.1.254"
-    # Capture DNS queries
-    # bpf: "udp port 53"
+    # bpf_filter: "host 192.168.1.1"
 
+    # Capture DNS queries
+    # bpf_filter: "udp port 53"
+    
     # Capture all traffic except SSH
-    # bpf: "not tcp port 22"
+    # bpf_filter: "not tcp port 22"
 
     # No filter (capture everything)
-    bpf_filter: ""
+    # bpf_filter: ""
 
 # Connection Tracking
 tracking:
     # Idle timeout: remove connections inactive for this duration (seconds)
     idle_timeout: 300
-
     # Cleanup interval: how often to check for stale connections (seconds)
     cleanup_interval: 60
 
@@ -63,7 +61,6 @@ tracking:
 stats:
     # Aggregation window in seconds
     window_size: 60
-
     # Keep history for this many windows
     history_depth: 24
 
@@ -71,7 +68,6 @@ stats:
 database:
     # SQLite file path for historical data
     path: "/tmp/netnet.db"
-
     # Retention period in days
     retention_days: 7
 
@@ -79,16 +75,15 @@ database:
 api:
     # Enable REST API
     enabled: true
-
     # Listen address
     bind: "127.0.0.1"
-
+    host: "0.0.0.0"
     # Port
     port: 8082
-
     # Authentication token (testing only, use a secure token in production)
     # token: "your-secret-token-here"
     token: "af9ff608895efc542d80b608a24c13d2"
+    session_expiry: 3600
 
 # Logging
 logging:
@@ -118,11 +113,11 @@ users:
       plaintext: "userpass" # For testing only
 
 # Performance Tuning
-performance:
-    # Buffer size for packet capture (bytes)
-    # Larger = fewer drops, more memory
-    buffer_size: 2097152 # 2MB
+# performance:
+#     # Buffer size for packet capture (bytes)
+#     # Larger = fewer drops, more memory
+#     buffer_size: 2097152 # 2MB
 
-    # Worker thread count for packet processing
-    # 0 = auto-detect CPU count
-    worker_threads: 0
+#     # Worker thread count for packet processing
+#     # 0 = auto-detect CPU count
+#     worker_threads: 0
