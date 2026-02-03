@@ -477,7 +477,7 @@ NETNET_IFACE=en0 NETNET_BPF_FILTER="" make demon
 sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml
 
 # Or use make target (includes sudo)
-make run-daemon-online
+make demon
 ```
 
 ### Port Already in Use
