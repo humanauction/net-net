@@ -190,6 +190,7 @@ NetMonDaemon::~NetMonDaemon() {
 
 void NetMonDaemon::run() {
     running_.store(true);
+    start_time_ = std::chrono::steady_clock::now();
     log("info", "NetMonDaemon is running...");
     
     std::thread capture_thread([this]() {
@@ -208,7 +209,7 @@ void NetMonDaemon::run() {
     });
 
     std::thread cleanup_thread([this]() {
-        while (running_.load()) {
+        while (running_.load() && running_signal_.load()) {
             // calc: time until next midnight UTC
             auto now = std::chrono::system_clock::now();
             auto now_t = std::chrono::system_clock::to_time_t(now);
@@ -603,6 +604,9 @@ void NetMonDaemon::setupApiRoutes() {
             response["windows"] = windows;
             res.set_content(response.dump(), "application/json");
         });
+
+    // NOTE: Removed /api/top-talkers, /api/port-stats, /api/system-health, /api/packet-sizes
+    // These require connection_tracker_ and pcap_adapter_ which aren't implemented yet
 }
 
 void NetMonDaemon::startServer() {
@@ -725,6 +729,40 @@ bool NetMonDaemon::shouldLog(const std::string& level) const {
     int configured = levels.count(log_level_) ? levels.at(log_level_) : 1;
     int current = levels.count(level) ? levels.at(level) : 1;
     return current >= configured;
+}
+
+std::string NetMonDaemon::getServiceName(uint16_t port) {
+    static const std::unordered_map<uint16_t, std::string> services = {
+        {20, "FTP-DATA"}, {21, "FTP"}, {22, "SSH"}, {23, "TELNET"},
+        {25, "SMTP"}, {53, "DNS"}, {67, "DHCP"}, {68, "DHCP"},
+        {80, "HTTP"}, {110, "POP3"}, {143, "IMAP"}, {443, "HTTPS"},
+        {445, "SMB"}, {993, "IMAPS"}, {995, "POP3S"}, {1433, "MSSQL"},
+        {3306, "MySQL"}, {3389, "RDP"}, {5432, "PostgreSQL"},
+        {5900, "VNC"}, {6379, "Redis"}, {8080, "HTTP-ALT"},
+        {8443, "HTTPS-ALT"}, {27017, "MongoDB"}
+    };
+    
+    auto it = services.find(port);
+    return it != services.end() ? it->second : "";
+}
+
+// ===================================================================
+// Helper: Validate Session for API endpoints
+// ===================================================================
+bool NetMonDaemon::validateSession(const httplib::Request& req, httplib::Response& res) const {
+    auto session_token = req.get_header_value("X-Session-Token");
+    if (session_token.empty()) {
+        res.status = 401;
+        res.set_content("{\"error\":\"no session token provided\"}", "application/json");
+        return false;
+    }
+    SessionData session_data;
+    if (!session_manager_ || !session_manager_->validateSession(session_token, session_data)) {
+        res.status = 401;
+        res.set_content("{\"error\":\"invalid session\"}", "application/json");
+        return false;
+    }
+    return true;
 }
 
 // ===================================================================

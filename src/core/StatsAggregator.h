@@ -5,6 +5,7 @@
 #include <memory>
 #include "core/ConnectionTracker.h"
 #include "core/Parser.h"
+#include <mutex>
 
 // Aggregated stats for a time window
 struct AggregatedStats {
@@ -22,6 +23,14 @@ struct AggregatedStats {
     AggregatedStats() = default;
 };
 
+struct PacketSizeDistribution {
+    uint64_t tiny = 0;    // 0-64 bytes
+    uint64_t small = 0;   // 65-128 bytes
+    uint64_t medium = 0;  // 129-512 bytes
+    uint64_t large = 0;   // 513-1024 bytes
+    uint64_t jumbo = 0;   // 1025+ bytes
+};
+
 class StatsAggregator {
 public:
     StatsAggregator(std::chrono::seconds window_size, size_t history_depth);
@@ -33,6 +42,8 @@ public:
     const AggregatedStats& currentStats() const;
 // Get stats history (rolling buffer)
     std::vector<AggregatedStats> history() const;
+    void recordPacketSize(size_t size);
+    PacketSizeDistribution getPacketSizeDistribution() const;
 
 
 private:
@@ -46,4 +57,6 @@ private:
         std::chrono::system_clock::time_point last_packet_ts;
     };
     std::unique_ptr<Impl> impl_;
+    mutable std::mutex size_mutex_;
+    PacketSizeDistribution packet_sizes_;
 };

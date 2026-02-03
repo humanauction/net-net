@@ -8,28 +8,89 @@
     </head>
     <body>
         <header>
-            <h1>Network Monitor</h1>
+            <h1>Network Monitor</h1>1>
             <p id="status">
-                Status: <span id="status-text">Connecting you now...</span>
+                Status: <span id="status-text">Connecting...</span>
             </p>
         </header>
         
         <main>
+            <!-- Row 1: Bandwidth + Protocol + System Health -->+ Protocol + System Health -->
             <section id="metrics">
                 <h2>Bandwidth</h2>
                 <div id="stats-summary">
                     <p>Total Bytes <span id="total-bytes">0 B</span></p>
-                    <p>Total Packets <span id="total-packets">0</span></p>
+                    <p>Total Packets <span id="total-packets">0</span></p>p>
                     <p>Active Flows <span id="active-flows">0</span></p>
                 </div>
-                <div id="bandwidth-chart"></div>
+                <div id="bandwidth-chart">
             </section>
 
-            <section id="protocol-breakdown">
+            <section id="protocol-breakdown">">
                 <h2>Protocol Breakdown</h2>
-                <canvas id="protocol-chart" width="220" height="220"></canvas>
+                <canvas id="protocol-chart" width="200" height="200"></canvas>
             </section>
-            
+
+            <section id="system-health">
+                <h2>System Health</h2>
+                <div class="health-grid">
+                    <div class="health-item">
+                        <span class="health-label">Uptime</span>
+                        <span class="health-value" id="uptime">0s</span>
+                    </div>
+                    <div class="health-item">
+                        <span class="health-label">Packets Received</span>
+                        <span class="health-value" id="packets-received">0</span>
+                    </div>
+                    <div class="health-item">
+                        <span class="health-label">Packets Dropped</span>
+                        <span class="health-value" id="packets-dropped">0</span>
+                    </div>
+                    <div class="health-item">
+                        <span class="health-label">Drop Rate</span>
+                        <span class="health-value" id="drop-rate">0%</span>
+                    </div>
+                    <div class="health-item">
+                        <span class="health-label">Interface</span>
+                        <span class="health-value" id="interface-name">--</span>
+                    </div>
+                    <div class="health-item">
+                        <span class="health-label">Capture</span>
+                        <span class="health-value" id="capture-status">--</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Row 2: Alerts Panel -->
+             <section id="alerts-panel">
+                <h2>Alerts</h2>
+                <div id="alerts-container">
+                    <div class="alert-empty">No alerts</div>
+                </div>
+            </section>
+
+            <!-- Row 3: Top Talkers -->
+            <section id="top-sources">
+                <h2>Top Sources</h2>
+                <div id="top-sources-list" class="top-list"></div>
+            </section>
+
+            <section id="top-destinations">
+                <h2>Top Destinations</h2>
+                <div id="top-destinations-list" class="top-list"></div>
+            </section>
+
+            <!-- Row 4: Port Activity + Packet Sizes -->
+            <section id="port-activity">
+                <h2>Port Activity</h2>
+                <div id="port-list" class="port-list"></div>
+            </section>
+
+            <section id="packet-sizes">
+                <h2>Packet Size Distribution</h2>
+                <canvas id="packet-size-chart" width="280" height="200"></canvas>
+            </section>
+            <!-- Row 5: Connections Table (Full Width) -->
             <section id="connections">
                 <h2>Active Connections</h2>
                 <table id="connections-table">

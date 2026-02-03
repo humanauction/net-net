@@ -40,6 +40,8 @@ private:
     void logAuthFailure(const httplib::Request& req) const;
     bool shouldLog(const std::string& level) const;
     bool checkRateLimit(const httplib::Request& req, httplib::Response& res, const std::string& endpoint);
+    bool validateSession(const httplib::Request& req, httplib::Response& res) const;
+    static std::string getServiceName(uint16_t port);
     
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_control_request_;
     const std::chrono::seconds control_rate_limit_{2};
@@ -64,4 +66,5 @@ private:
     bool log_timestamps_ = true;
     std::unique_ptr<SessionManager> session_manager_;
     int session_expiry_ = 3600;
+    std::chrono::steady_clock::time_point start_time_;
 };

@@ -5,6 +5,7 @@
 #include <array>
 #include <cstring>
 #include <tuple>
+#include <mutex>
 
 namespace {
 
@@ -165,4 +166,24 @@ void StatsAggregator::ingest(const ParsedPacket& packet) {
     impl_->current.total_bytes += packet.meta.cap_len;
     impl_->current.total_packets +=1; 
     
+}
+
+void StatsAggregator::recordPacketSize(size_t size) {
+    std::lock_guard<std::mutex> lock(size_mutex_);
+    if (size <= 64) {
+        packet_sizes_.tiny++;
+    } else if (size <= 128) {
+        packet_sizes_.small++;
+    } else if (size <= 512) {
+        packet_sizes_.medium++;
+    } else if (size <= 1024) {
+        packet_sizes_.large++;
+    } else {
+        packet_sizes_.jumbo++;
+    }
+}
+
+PacketSizeDistribution StatsAggregator::getPacketSizeDistribution() const {
+    std::lock_guard<std::mutex> lock(size_mutex_);
+    return packet_sizes_;
 }
