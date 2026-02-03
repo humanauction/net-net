@@ -605,9 +605,153 @@ void NetMonDaemon::setupApiRoutes() {
             res.set_content(response.dump(), "application/json");
         });
 
-    // NOTE: Removed /api/top-talkers, /api/port-stats, /api/system-health, /api/packet-sizes
-    // These require connection_tracker_ and pcap_adapter_ which aren't implemented yet
-}
+        // GET /api/top-talkers - Top bandwidth consumers
+        svr_.Get("/api/top-talkers", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+            add_cors(res);
+            if (!isAuthorized(req)) {
+                logAuthFailure(req);
+                res.status = 401;
+                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+                return;
+            }
+            
+            auto stats = aggregator_->currentStats();
+            
+            // Aggregate by source IP
+            std::unordered_map<std::string, uint64_t> src_bytes;
+            std::unordered_map<std::string, uint64_t> dst_bytes;
+            
+            for (const auto& [key, val] : stats.flows) {
+                uint64_t total_bytes = val.bytes_c2s + val.bytes_s2c;
+                src_bytes[key.src_ip] += total_bytes;
+                dst_bytes[key.dst_ip] += total_bytes;
+            }
+            
+            // Convert to sorted vectors
+            std::vector<std::pair<std::string, uint64_t>> top_sources(src_bytes.begin(), src_bytes.end());
+            std::vector<std::pair<std::string, uint64_t>> top_destinations(dst_bytes.begin(), dst_bytes.end());
+            
+            std::sort(top_sources.begin(), top_sources.end(), 
+                [](const auto& a, const auto& b) { return a.second > b.second; });
+            std::sort(top_destinations.begin(), top_destinations.end(),
+                [](const auto& a, const auto& b) { return a.second > b.second; });
+            
+            nlohmann::json response;
+            response["top_sources"] = nlohmann::json::array();
+            response["top_destinations"] = nlohmann::json::array();
+            
+            for (size_t i = 0; i < std::min(top_sources.size(), size_t(10)); ++i) {
+                response["top_sources"].push_back({
+                    {"ip", top_sources[i].first},
+                    {"bytes", top_sources[i].second}
+                });
+            }
+            
+            for (size_t i = 0; i < std::min(top_destinations.size(), size_t(10)); ++i) {
+                response["top_destinations"].push_back({
+                    {"ip", top_destinations[i].first},
+                    {"bytes", top_destinations[i].second}
+                });
+            }
+            
+            res.set_content(response.dump(), "application/json");
+        });
+        
+        // GET /api/port-stats - Port activity statistics
+        svr_.Get("/api/port-stats", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+            add_cors(res);
+            if (!isAuthorized(req)) {
+                logAuthFailure(req);
+                res.status = 401;
+                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+                return;
+            }
+            
+            auto stats = aggregator_->currentStats();
+            
+            std::unordered_map<uint16_t, uint64_t> port_bytes;
+            std::unordered_map<uint16_t, uint64_t> port_connections;
+            
+            for (const auto& [key, val] : stats.flows) {
+                uint64_t total_bytes = val.bytes_c2s + val.bytes_s2c;
+                port_bytes[key.dst_port] += total_bytes;
+                port_connections[key.dst_port]++;
+            }
+            
+            std::vector<std::tuple<uint16_t, uint64_t, uint64_t>> ports;
+            for (const auto& [port, bytes] : port_bytes) {
+                ports.emplace_back(port, bytes, port_connections[port]);
+            }
+            
+            std::sort(ports.begin(), ports.end(),
+                [](const auto& a, const auto& b) { return std::get<1>(a) > std::get<1>(b); });
+            
+            nlohmann::json response = nlohmann::json::array();
+            for (size_t i = 0; i < std::min(ports.size(), size_t(20)); ++i) {
+                response.push_back({
+                    {"port", std::get<0>(ports[i])},
+                    {"bytes", std::get<1>(ports[i])},
+                    {"connections", std::get<2>(ports[i])},
+                    {"service", getServiceName(std::get<0>(ports[i]))}
+                });
+            }
+            
+            res.set_content(response.dump(), "application/json");
+        });
+        
+        // GET /api/system-health - Daemon health metrics
+        svr_.Get("/api/system-health", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+            add_cors(res);
+            if (!isAuthorized(req)) {
+                logAuthFailure(req);
+                res.status = 401;
+                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+                return;
+            }
+            
+            auto now = std::chrono::steady_clock::now();
+            auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count();
+            
+            // Get flow count from current stats
+            auto stats = aggregator_->currentStats();
+            
+            nlohmann::json response = {
+                {"uptime_seconds", uptime},
+                {"packets_received", 0},  // PcapAdapter doesn't expose stats yet
+                {"packets_dropped", 0},   // PcapAdapter doesn't expose stats yet
+                {"drop_rate", 0.0},
+                {"active_flows", stats.flows.size()},
+                {"capture_running", running_.load()},
+                {"interface", pcap_->source()},
+                {"buffer_usage_percent", 0.0}  // Not implemented yet
+            };
+            
+            res.set_content(response.dump(), "application/json");
+        });
+        
+        // GET /api/packet-sizes - Packet size distribution (stub for now)
+        svr_.Get("/api/packet-sizes", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
+            add_cors(res);
+            if (!isAuthorized(req)) {
+                logAuthFailure(req);
+                res.status = 401;
+                res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+                return;
+            }
+            
+            // StatsAggregator doesn't track packet sizes yet
+            // Return zeros for now
+            nlohmann::json response = {
+                {"tiny", 0},    // 0-64 bytes
+                {"small", 0},   // 65-128 bytes
+                {"medium", 0},  // 129-512 bytes
+                {"large", 0},   // 513-1024 bytes
+                {"jumbo", 0}    // 1025+ bytes
+            };
+            
+            res.set_content(response.dump(), "application/json");
+        });
+        }
 
 void NetMonDaemon::startServer() {
     log("info", "Starting API server on " + api_host_ + ":" + std::to_string(api_port_));
