@@ -45,10 +45,10 @@ make clean
 make build
 
 # Start daemon with live capture (requires sudo)
-make run-daemon-online
+make demon
 
 # Or start with environment variables for your interface
-NETNET_IFACE=en0 NETNET_BPF_FILTER="" make run-daemon-online
+NETNET_IFACE=en0 NETNET_BPF_FILTER="" make demon
 
 # Open dashboard in browser
 open http://localhost:8082
@@ -63,8 +63,8 @@ The project includes a comprehensive Makefile with the following targets:
 | `make` | Build all binaries |
 | `make build` | Build the project |
 | `make rebuild` | Clean and rebuild |
-| `make run-daemon-online` | Run daemon with live capture (requires sudo) |
-| `make run-daemon-offline` | Run daemon with PCAP file replay |
+| `make demon` | Run daemon with live capture (requires sudo) |
+| `make demon-ol` | Run daemon with PCAP file replay |
 | `make test` | Run ALL tests (C++ + Python) |
 | `make test-cpp` | Run C++ tests only |
 | `make test-python` | Run Python integration tests only |
@@ -467,7 +467,7 @@ make coverage-html
 ifconfig | grep -B1 "inet "
 
 # Run with empty BPF filter to capture ALL traffic
-NETNET_IFACE=en0 NETNET_BPF_FILTER="" make run-daemon-online
+NETNET_IFACE=en0 NETNET_BPF_FILTER="" make demon
 ```
 
 ### Permission Denied
