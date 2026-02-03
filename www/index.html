@@ -3,43 +3,42 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Net-Net Universal Dashboard</title>
+        <title>Net-Net Dashboard</title>
         <link rel="stylesheet" href="style.css" />
     </head>
     <body>
         <header>
-            <h1>Network Monitor Dashboard</h1>
+            <h1>⚡ Net-Net Monitor</h1>
             <p id="status">
-                Status: <span id="status-text">Connecting you now...</span>
+                Status: <span id="status-text">Connecting...</span>
             </p>
         </header>
+        
         <main>
             <section id="metrics">
-                <h2>Metrics</h2>
+                <h2>Bandwidth</h2>
                 <div id="stats-summary">
-                    <p>total bytes: <span id="total-bytes">0 B</span></p>
-                    <p>total packets: <span id="total-packets">0</span></p>
-                    <p>active flows: <span id="active-flows">0</span></p>
+                    <p>Total Bytes <span id="total-bytes">0 B</span></p>
+                    <p>Total Packets <span id="total-packets">0</span></p>
+                    <p>Active Flows <span id="active-flows">0</span></p>
                 </div>
-                <div id="bandwidth-chart">
-                    <div id="bandwidth-chart-container"></div>
-                </div>
+                <div id="bandwidth-chart"></div>
             </section>
 
             <section id="protocol-breakdown">
                 <h2>Protocol Breakdown</h2>
-                <canvas id="protocol-chart" width="300" height="300"></canvas>
+                <canvas id="protocol-chart" width="220" height="220"></canvas>
             </section>
             
             <section id="connections">
-                <h2>Connections Active</h2>
+                <h2>Active Connections</h2>
                 <table id="connections-table">
                     <thead>
                         <tr>
                             <th>Source IP</th>
-                            <th>Source Port</th>
+                            <th>Src Port</th>
                             <th>Destination IP</th>
-                            <th>Destination Port</th>
+                            <th>Dst Port</th>
                             <th>Protocol</th>
                             <th>Bytes</th>
                             <th>Packets</th>
@@ -48,41 +47,41 @@
                     <tbody id="connections-tbody"></tbody>
                 </table>
             </section>
-            <!-- Login Modal -->
-            <div id="login-modal">
-                <div id="inner-modal">
-                    <h2 id="h2-modal">Login Required</h2>
-                    <form id="login-form">
-                        <input
-                            type="text"
-                            id="username"
-                            placeholder="username"
-                            autocomplete="username"
-                            class="login"
-                            required
-                        />
-                        <input
-                            type="password"
-                            id="password"
-                            placeholder="Password"
-                            class="login"
-                            autocomplete="current-password"
-                            required
-                        />
-                        <button type="submit" class="login-btn">Login</button>
-                        <div id="login-error"></div>
-                    </form>
-                </div>
-            </div>
-            <!-- User Info Bar -->
-            <div id="user-bar" class="user-bar">
-                <span
-                    id="username-display"
-                    style="color: #4caf50; margin-right: 15px"
-                ></span>
-                <button id="logout-btn" class="logout-btn">Logout</button>
-            </div>
         </main>
+
+        <!-- Login Modal -->
+        <div id="login-modal">
+            <div id="inner-modal">
+                <h2 id="h2-modal">🔐 Login Required</h2>
+                <form id="login-form">
+                    <input
+                        type="text"
+                        id="username"
+                        placeholder="Username"
+                        autocomplete="username"
+                        class="login"
+                        required
+                    />
+                    <input
+                        type="password"
+                        id="password"
+                        placeholder="Password"
+                        class="login"
+                        autocomplete="current-password"
+                        required
+                    />
+                    <button type="submit" class="login-btn">Sign In</button>
+                    <div id="login-error"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- User Bar -->
+        <div id="user-bar" class="user-bar">
+            <span id="username-display"></span>
+            <button id="logout-btn" class="logout-btn">Logout</button>
+        </div>
+
         <script src="https://d3js.org/d3.v7.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script src="app.js"></script>

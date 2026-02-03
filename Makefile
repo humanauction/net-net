@@ -112,11 +112,11 @@ coverage-html: rebuild-coverage
 	@echo "✅ Coverage report: coverage.html"
 	@$(OPEN_CMD) coverage.html 2>/dev/null || echo "Open coverage.html manually"
 
-run-daemon-online: config-ci build
+demon: config-ci build
 	@echo "==> Running daemon with config: $(CONFIG_CI)"
 	@sudo "$(DAEMON)" --config "$(CONFIG_CI)"
 
-run-daemon-offline: build
+demon-ol: build
 	@echo "==> Running daemon in offline mode..."
 	@"$(DAEMON)" --config "$(CONFIG)" --offline "$(PCAP)"
 

@@ -1,7 +1,6 @@
 # net-net
 
 [![CI/CD Pipeline](https://github.com/humanauction/net-net/actions/workflows/ci.yml/badge.svg)](https://github.com/humanauction/net-net/actions/workflows/ci.yml)
-
 [![codecov](https://codecov.io/gh/humanauction/net-net/graph/badge.svg)](https://codecov.io/gh/humanauction/net-net)
 
 Real-Time Network Monitor with Web Dashboard
@@ -32,6 +31,7 @@ A high-performance, modular network monitoring daemon written in C++17 that capt
 - **CMake 3.16+**
 - **Python 3.x** with pip (for integration tests)
 - **Root/sudo access** (for packet capture)
+- **envsubst** (usually included with `gettext`)
 
 ### Build & Run
 
@@ -42,13 +42,47 @@ cd net-net
 
 # Build daemon
 make clean
-make
+make build
 
-# Start daemon (requires sudo for packet capture)
-sudo ./build/netnet-daemon --config examples/sample-config.yaml
+# Start daemon with live capture (requires sudo)
+make run-daemon-online
+
+# Or start with environment variables for your interface
+NETNET_IFACE=en0 NETNET_BPF_FILTER="" make run-daemon-online
 
 # Open dashboard in browser
 open http://localhost:8082
+```
+
+### Using the Makefile
+
+The project includes a comprehensive Makefile with the following targets:
+
+| Command | Description |
+| ------- | ----------- |
+| `make` | Build all binaries |
+| `make build` | Build the project |
+| `make rebuild` | Clean and rebuild |
+| `make run-daemon-online` | Run daemon with live capture (requires sudo) |
+| `make run-daemon-offline` | Run daemon with PCAP file replay |
+| `make test` | Run ALL tests (C++ + Python) |
+| `make test-cpp` | Run C++ tests only |
+| `make test-python` | Run Python integration tests only |
+| `make coverage` | Generate coverage report |
+| `make coverage-html` | Generate HTML coverage report |
+| `make clean` | Clean all build artifacts |
+| `make venv` | Set up Python virtual environment |
+| `make config-ci` | Generate CI config from template |
+
+### Environment Variables
+
+Configure capture settings via environment variables:
+
+```bash
+export NETNET_IFACE=en0          # Network interface (default: en0)
+export NETNET_USER=nobody        # User for privilege drop
+export NETNET_GROUP=nobody       # Group for privilege drop
+export NETNET_BPF_FILTER=""      # BPF filter (empty = capture all)
 ```
 
 ### Default Credentials
@@ -122,7 +156,6 @@ See [docs/design.md](docs/design.md) for detailed architecture documentation.
 ```text
 net-net/
 ├── src/                                # C++ source code
-│   ├── Main.cpp                        # Entry point
 │   ├── core/                           # Core monitoring logic
 │   │   ├── Parser.{cpp,h}              # Packet parsing (Ethernet→IP→TCP/UDP)
 │   │   ├── ConnectionTracker.{cpp,h}   # Flow tracking
@@ -133,8 +166,9 @@ net-net/
 │   ├── net/                            # Network adapters
 │   │   └── PcapAdapter.{cpp,h}         # libpcap wrapper
 │   └── daemon/                         # Daemon implementation
+│       ├── Main.cpp                    # Entry point
 │       ├── NetMonDaemon.{cpp,h}        # Main daemon class
-│       └── (ConfigLoader merged into NetMonDaemon)
+│       └── httplib.h                   # HTTP server (header-only)
 ├── www/                                # Web dashboard
 │   ├── index.html                      # Dashboard UI
 │   ├── style.css                       # Styling
@@ -144,7 +178,7 @@ net-net/
 │   └── uuid_gen.{cpp,h}                # Session token generation
 ├── tests/                              # Test suites
 │   ├── unit/                           # C++ unit tests (GoogleTest)
-│   ├── integration/                    # Integration tests (C++ + Python)
+│   ├── integration/                    # Python integration tests
 │   └── fixtures/                       # Test PCAP files
 ├── docs/                               # Documentation
 │   ├── design.md                       # Architecture overview
@@ -152,8 +186,9 @@ net-net/
 │   ├── EntityRelationshipDataModel.md  # Database schema
 │   ├── packetFlowDiagram.md            # Packet processing flow
 │   └── securityChecklistReview.md      # Security audit
-├── examples/                           # Example configuration(s)
-│   └── sample-config.yaml              
+├── examples/                           # Configuration templates
+│   ├── sample-config.yaml              # Template with env vars
+│   └── sample-config.ci.yaml           # Generated CI config
 ├── CMakeLists.txt                      # Build configuration
 ├── Makefile                            # Build wrapper
 └── README.md                           # This file
@@ -163,39 +198,45 @@ net-net/
 
 ## ⚙️ Configuration
 
-All settings configured via YAML. Example: [`examples/sample-config.yaml`](examples/sample-config.yaml)
+Configuration uses YAML with environment variable substitution. The Makefile generates `sample-config.ci.yaml` from `sample-config.yaml` using `envsubst`.
 
-### Capture Settings
+### Interface Settings
 
 ```yaml
-capture:
-  mode: "live"                    # "live" or "offline"
-  interface: "en0"                # Network interface (live mode)
-  pcap_file: ""                   # PCAP file path (offline mode)
-  bpf_filter: ""                  # BPF filter (e.g., "tcp port 80")
-  promiscuous: false              # Promiscuous mode
-  snaplen: 65535                  # Capture length (bytes)
+interface:
+  name: "${NETNET_IFACE}"         # Network interface (e.g., en0, eth0)
+  promiscuous: true               # Capture all packets on segment
+  snaplen: 65535                  # Max bytes per packet
   timeout_ms: 1000                # Read timeout
+  bpf_filter: "${NETNET_BPF_FILTER}"  # BPF filter (empty = all traffic)
+```
+
+### Offline Mode (PCAP Replay)
+
+```yaml
+offline:
+  file: "/path/to/capture.pcap"   # Uncomment to replay PCAP file
 ```
 
 ### API Settings
 
 ```yaml
 api:
-  host: "localhost"
-  port: 8082
-  token: "your_secure_token_here"  # For /control endpoints
-  session_expiry: 3600             # Session timeout (seconds)
+  enabled: true
+  host: "0.0.0.0"                 # Listen address
+  port: 8082                      # Listen port
+  token: "your_secure_token"      # For /control endpoints
+  session_expiry: 3600            # Session timeout (seconds)
 ```
 
-### Authentication
+### User Credentials
 
 ```yaml
 users:
   - username: "admin"
-    password_hash: "$2a$12$..."   # bcrypt hash
+    password: "$2a$12$..."        # bcrypt hash
   - username: "user"
-    password_hash: "$2a$12$..."
+    password: "$2a$12$..."
 ```
 
 **Generate bcrypt hashes:**
@@ -204,29 +245,45 @@ users:
 python3 -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt()).decode())"
 ```
 
-### Privilege Drop (Security)
+### Connection Tracking
 
 ```yaml
-privilege:
-  drop: true
-  user: "nobody"
-  group: "nobody"
+tracking:
+  idle_timeout: 300               # Remove idle connections after N seconds
+  cleanup_interval: 60            # Cleanup check interval
+```
+
+### Statistics
+
+```yaml
+stats:
+  window_size: 60                 # Aggregation window (seconds)
+  history_depth: 24               # Number of windows to retain
 ```
 
 ### Database
 
 ```yaml
 database:
-  path: "netnet.db"
-  retention_days: 7
+  path: "/tmp/netnet.db"          # SQLite file path
+  retention_days: 7               # Data retention period
+```
+
+### Privilege Drop (Security)
+
+```yaml
+privilege:
+  drop: true
+  user: "${NETNET_USER}"
+  group: "${NETNET_GROUP}"
 ```
 
 ### Logging
 
 ```yaml
 logging:
-  level: "info"          # debug, info, warning, error
-  file: ""               # Empty = stdout
+  level: "debug"                  # debug, info, warn, error
+  file: ""                        # Empty = stdout
   timestamps: true
 ```
 
@@ -267,14 +324,6 @@ Invalidate session token.
 
 ```http
 X-Session-Token: <token>
-```
-
-**Response:**
-
-```json
-{
-  "message": "Logged out successfully"
-}
 ```
 
 ---
@@ -327,12 +376,6 @@ X-Session-Token: <token>
 
 Start packet capture.
 
-**Headers:**
-
-```http
-Authorization: Bearer <api_token>
-```
-
 #### POST `/control/stop`
 
 Stop packet capture.
@@ -341,7 +384,11 @@ Stop packet capture.
 
 Reload configuration file.
 
-**Note:** Control endpoints require API token (not session token).
+**Headers (all control endpoints):**
+
+```http
+Authorization: Bearer <api_token>
+```
 
 See [docs/api.md](docs/api.md) for complete API documentation.
 
@@ -355,10 +402,26 @@ See [docs/api.md](docs/api.md) for complete API documentation.
 make test
 ```
 
-### C++ Unit Tests (GoogleTest)
+### C++ Unit Tests Only
 
 ```bash
-./build/test_runner
+make test-cpp
+```
+
+### Python Integration Tests Only
+
+```bash
+make test-python
+```
+
+### Coverage Reports
+
+```bash
+# Terminal summary
+make coverage
+
+# HTML report (opens in browser)
+make coverage-html
 ```
 
 **Test Suites:**
@@ -369,42 +432,19 @@ make test
 - `test_stats_aggregator` - Metrics aggregation
 - `test_session_manager` - Authentication
 
-### Integration Tests (Python)
-
-```bash
-# Start daemon first
-sudo ./build/netnet-daemon --config examples/sample-config.yaml &
-
-# Run Python tests
-source .venv-netnet/bin/activate
-pytest tests/integration/ -v
-
-# Kill daemon
-sudo pkill netnet-daemon
-```
-
-**Test Coverage:**
-
-- ✅ 6 C++ unit test suites
-- ✅ 16 Python integration tests
-- ✅ Authentication (login, logout, token validation)
-- ✅ API endpoints (metrics, control)
-- ✅ Security (SQL injection, XSS, rate limiting)
-- ✅ Concurrency (session expiry, cleanup)
-
 ---
 
 ## 🔒 Security
 
 ### Implemented Safeguards
 
-- ✅ **Privilege Dropping:** Daemon drops to `nobody:nobody` after opening capture device
-- ✅ **bcrypt Password Hashing:** All passwords hashed with salt (cost factor: 12)
+- ✅ **Privilege Dropping:** Daemon drops to configured user/group after opening capture device
+- ✅ **bcrypt Password Hashing:** All passwords hashed with salt
 - ✅ **Session Tokens:** UUID-based tokens, SQLite-backed, configurable expiry
 - ✅ **Rate Limiting:** Control endpoints limited to 1 request per 2 seconds per IP
 - ✅ **Input Validation:** BPF filter sanitization, JSON schema validation
 - ✅ **No Credential Logging:** Passwords never logged or displayed
-- ✅ **HTTPS Ready:** Daemon designed for reverse proxy (nginx/Caddy) with TLS
+- ✅ **HTTPS Ready:** Designed for reverse proxy (nginx/Caddy) with TLS
 
 ### Production Checklist
 
@@ -412,7 +452,7 @@ sudo pkill netnet-daemon
 - [ ] Use strong API tokens (32+ characters)
 - [ ] Enable HTTPS via reverse proxy
 - [ ] Restrict API access by IP/firewall
-- [ ] Run daemon as dedicated user (not `nobody`)
+- [ ] Run daemon as dedicated user
 - [ ] Enable audit logging
 - [ ] Review [`docs/securityChecklistReview.md`](docs/securityChecklistReview.md)
 
@@ -420,11 +460,24 @@ sudo pkill netnet-daemon
 
 ## 🐛 Troubleshooting
 
+### No Metrics/Data Showing
+
+```bash
+# Check you're capturing on the right interface
+ifconfig | grep -B1 "inet "
+
+# Run with empty BPF filter to capture ALL traffic
+NETNET_IFACE=en0 NETNET_BPF_FILTER="" make run-daemon-online
+```
+
 ### Permission Denied
 
 ```bash
-# Run with sudo (required for packet capture)
-sudo ./build/netnet-daemon --config examples/sample-config.yaml
+# Packet capture requires root
+sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml
+
+# Or use make target (includes sudo)
+make run-daemon-online
 ```
 
 ### Port Already in Use
@@ -433,67 +486,34 @@ sudo ./build/netnet-daemon --config examples/sample-config.yaml
 # Kill existing daemon
 sudo pkill netnet-daemon
 
-# Or change port in config
-api:
-  port: 8082  # Change from 8080
+# Check what's using the port
+lsof -i :8082
 ```
 
 ### Interface Not Found
 
 ```bash
-# List available interfaces
-ifconfig -a
+# List available interfaces (macOS)
+ifconfig | grep -E "^[a-z]" | cut -d: -f1
 
-# Update config with correct interface
-capture:
-  interface: "en0"  # Change to your active interface
+# Common interfaces:
+# macOS WiFi: en0
+# macOS Ethernet: en1
+# Linux: eth0, wlan0
+# Loopback: lo0 (macOS), lo (Linux)
 ```
 
 ### Dashboard Shows "Connection Refused"
 
 1. Check daemon is running: `ps aux | grep netnet-daemon`
 2. Check port: `lsof -i :8082`
-3. Check logs: `tail -f /var/log/netnet-daemon.log`
-4. Verify config: `cat examples/sample-config.yaml`
+3. Verify config has `host: "0.0.0.0"` not `"localhost"`
 
 ### Session Token Invalid
 
 ```bash
-# Clear browser localStorage
-# Open browser console (F12):
+# Clear browser localStorage (F12 console)
 localStorage.clear()
-
-# Or delete session database
-rm -f netnet.db.sessions
-```
-
-### API Returns 401 Unauthorized
-
-```bash
-# Test login endpoint
-curl -X POST http://localhost:8082/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"adminpass"}'
-
-# If login fails, check password hash in config
-```
-
-### One-liner to clean and rebuild coverage
-
-```bash
-cd build && \
-find . -name "*.gc*" -delete && \
-rm -rf * && \
-cmake .. -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_CXX_FLAGS="--coverage -g -O0" \
-  -DCMAKE_EXE_LINKER_FLAGS="--coverage" && \
-make -j$(sysctl -n hw.ncpu) && \
-./test_parser_extended && \
-./test_pcap_adapter_extended && \
-gcovr --root .. \
-  --exclude '.*tests/.*' \
-  --exclude '.*vendor/.*' \
-  --print-summary
 ```
 
 ---
@@ -556,46 +576,13 @@ gcovr --root .. \
 - Login/logout UI
 - Session token management
 
-### 🔄 Stage 6: Hardening, CI, Docs (In Progress)
+### ✅ Stage 6: Hardening, CI, Docs (Complete)
 
-- [✅] CI/CD pipeline (GitHub Actions)
-- [✅] Code coverage reporting (gcov, lcov)
-- [ ] Sanitizer builds (ASan/UBSan/TSan)
-- [ ] Docker support with health checks
-- [ ] Performance benchmarks
-- [ ] Deployment guide (systemd/Docker)
-- [ ] Troubleshooting guide
-- [ ] Contributing guide
-
----
-
-## 🚢 Deployment
-
-### systemd Service (Linux)
-
-```bash
-# Copy service file
-sudo cp scripts/netnet-daemon.service /etc/systemd/system/
-
-# Enable and start
-sudo systemctl enable netnet-daemon
-sudo systemctl start netnet-daemon
-
-# Check status
-sudo systemctl status netnet-daemon
-```
-
-### Docker (Coming Soon)
-
-```bash
-# Build image
-docker build -t netnet:latest .
-
-# Run with host network (for packet capture)
-docker run --rm --net=host --cap-add=NET_RAW \
-  -v $(pwd)/examples/sample-config.yaml:/etc/netnet/config.yaml \
-  netnet:latest
-```
+- CI/CD pipeline (GitHub Actions)
+- Code coverage reporting (gcov/gcovr)
+- Comprehensive Makefile
+- Environment variable configuration
+- Documentation updates
 
 ---
 
@@ -640,5 +627,3 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 - **GitHub Issues:** [github.com/humanauction/net-net/issues](https://github.com/humanauction/net-net/issues)
 - **Email:** [humanauction@gmail.com](mailto:humanauction@gmail.com)
-
----
