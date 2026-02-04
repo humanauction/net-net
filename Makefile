@@ -116,7 +116,11 @@ demon: config-ci build
 	@echo "==> Running daemon with config: $(CONFIG_CI)"
 	@sudo "$(DAEMON)" --config "$(CONFIG_CI)"
 
-demon-ol: build
+demon-stop:
+	@echo "==> Stopping daemon..."
+	@sudo pkill -f "$(DAEMON)" || echo "Daemon not running."
+
+demon-offl: build
 	@echo "==> Running daemon in offline mode..."
 	@"$(DAEMON)" --config "$(CONFIG)" --offline "$(PCAP)"
 
