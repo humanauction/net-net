@@ -731,7 +731,7 @@ void NetMonDaemon::setupApiRoutes() {
             res.set_content(response.dump(), "application/json");
         });
         
-        // TODO: GET /api/packet-sizes Packet size distribution 
+        // GET /api/packet-sizes Packet size distribution 
         svr_.Get("/api/packet-sizes", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
             add_cors(res);
             if (!isAuthorized(req)) {
@@ -741,19 +741,21 @@ void NetMonDaemon::setupApiRoutes() {
                 return;
             }
             
-            // TODO: StatsAggregator track packet sizes yet
+            // StatsAggregator track packet sizes yet
+            auto dist  = aggregator_->getPacketSizeDistribution();
+            
             // Return zeros for now
             nlohmann::json response = {
-                {"tiny", 0},    // 0-64 bytes
-                {"small", 0},   // 65-128 bytes
-                {"medium", 0},  // 129-512 bytes
-                {"large", 0},   // 513-1024 bytes
-                {"jumbo", 0}    // 1025+ bytes
+                {"tiny", dist.tiny},    // 0-64 bytes
+                {"small", dist.small},   // 65-128 bytes
+                {"medium", dist.medium},  // 129-512 bytes
+                {"large", dist.large},   // 513-1024 bytes
+                {"jumbo", dist.jumbo}    // 1025+ bytes
             };
             
             res.set_content(response.dump(), "application/json");
         });
-        }
+}
 
 void NetMonDaemon::startServer() {
     log("info", "Starting API server on " + api_host_ + ":" + std::to_string(api_port_));
@@ -890,25 +892,6 @@ std::string NetMonDaemon::getServiceName(uint16_t port) {
     
     auto it = services.find(port);
     return it != services.end() ? it->second : "";
-}
-
-// ===================================================================
-// Helper: Validate Session for API endpoints
-// ===================================================================
-bool NetMonDaemon::validateSession(const httplib::Request& req, httplib::Response& res) const {
-    auto session_token = req.get_header_value("X-Session-Token");
-    if (session_token.empty()) {
-        res.status = 401;
-        res.set_content("{\"error\":\"no session token provided\"}", "application/json");
-        return false;
-    }
-    SessionData session_data;
-    if (!session_manager_ || !session_manager_->validateSession(session_token, session_data)) {
-        res.status = 401;
-        res.set_content("{\"error\":\"invalid session\"}", "application/json");
-        return false;
-    }
-    return true;
 }
 
 // ===================================================================

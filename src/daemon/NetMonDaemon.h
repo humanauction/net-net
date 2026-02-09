@@ -40,7 +40,6 @@ private:
     void logAuthFailure(const httplib::Request& req) const;
     bool shouldLog(const std::string& level) const;
     bool checkRateLimit(const httplib::Request& req, httplib::Response& res, const std::string& endpoint);
-    bool validateSession(const httplib::Request& req, httplib::Response& res) const;
     static std::string getServiceName(uint16_t port);
     
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_control_request_;
