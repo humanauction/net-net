@@ -114,7 +114,7 @@ function updateProtocolChart(protocolData) {
         labels: Object.keys(protocolData),
         datasets: [{
             data: Object.values(protocolData),
-            backgroundColor: ['#22c55e', '#4ade80', '#86efac', '#bbf7d0'],
+            backgroundColor: ['#0c5125', '#2db35e', '#86efac', '#bbf7d0'],
             borderColor: '#000',
             borderWidth: 1
         }]
@@ -161,7 +161,7 @@ function updatePacketSizeChart(sizeData) {
         labels: labels,
         datasets: [{
             data: values,
-            backgroundColor: ['#14532d', '#166534', '#15803d', '#16a34a', '#22c55e'],
+            backgroundColor: ['#000f06', '#002a10', '#004d1c', '#00ce4c', '#c8f9da'],
             borderColor: '#000',
             borderWidth: 1
         }]

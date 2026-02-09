@@ -15,7 +15,15 @@
         </header>
         
         <main>
-            <!-- Row 1: Bandwidth + Protocol + System Health -->
+            <!-- Row 1: Alerts Panel -->
+             <section id="alerts-panel">
+                <h2>Alerts</h2>
+                <div id="alerts-container">
+                    <div class="alert-empty">No alerts</div>
+                </div>
+            </section>
+            
+            <!-- Row 2: Bandwidth + Protocol + System Health -->
             <section id="metrics">
                 <h2>Bandwidth</h2>
                 <div id="stats-summary">
@@ -58,14 +66,6 @@
                         <span class="health-label">Capture</span>
                         <span class="health-value" id="capture-status">--</span>
                     </div>
-                </div>
-            </section>
-
-            <!-- Row 2: Alerts Panel -->
-             <section id="alerts-panel">
-                <h2>Alerts</h2>
-                <div id="alerts-container">
-                    <div class="alert-empty">No alerts</div>
                 </div>
             </section>
 

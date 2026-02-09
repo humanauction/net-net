@@ -729,7 +729,7 @@ void NetMonDaemon::setupApiRoutes() {
             res.set_content(response.dump(), "application/json");
         });
         
-        // GET /api/packet-sizes - Packet size distribution (stub for now)
+        // TODO: (stub for now) GET /api/packet-sizes Packet size distribution 
         svr_.Get("/api/packet-sizes", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
             add_cors(res);
             if (!isAuthorized(req)) {
@@ -739,7 +739,7 @@ void NetMonDaemon::setupApiRoutes() {
                 return;
             }
             
-            // StatsAggregator doesn't track packet sizes yet
+            // TODO: StatsAggregator track packet sizes yet
             // Return zeros for now
             nlohmann::json response = {
                 {"tiny", 0},    // 0-64 bytes

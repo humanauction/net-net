@@ -93,7 +93,7 @@ TEST(StatsAggregatorIntegrationTest, AggregatesPcapReplay) {
     ASSERT_FALSE(history.empty()) << "No history available after advancing window";
     const AggregatedStats& stats = history.back();
     
-    // Just verify we parsed something
+    // Verify something was parsed 
     ASSERT_GT(packet_count, 0) << "No packets were parsed from pcap file";
     ASSERT_GT(stats.flows.size(), 0) << "No flows were aggregated";
 }
