@@ -714,22 +714,24 @@ void NetMonDaemon::setupApiRoutes() {
             
             // Get flow count from current stats
             auto stats = aggregator_->currentStats();
+            // PcapAdapter stats
+            auto pcap_stats = pcap_->getStats();
             
             nlohmann::json response = {
                 {"uptime_seconds", uptime},
-                {"packets_received", 0},  // PcapAdapter doesn't expose stats yet
-                {"packets_dropped", 0},   // PcapAdapter doesn't expose stats yet
-                {"drop_rate", 0.0},
+                {"packets_received", pcap_stats.packets_received},
+                {"packets_dropped", pcap_stats.packets_dropped},
+                {"drop_rate", pcap_stats.packets_received > 0 ? (double)pcap_stats.packets_dropped / pcap_stats.packets_received * 100 : 0.0},
                 {"active_flows", stats.flows.size()},
                 {"capture_running", running_.load()},
                 {"interface", pcap_->source()},
-                {"buffer_usage_percent", 0.0}  // Not implemented yet
+                {"buffer_usage_percent", 0.0}  // TODO: Not implemented yet
             };
             
             res.set_content(response.dump(), "application/json");
         });
         
-        // TODO: (stub for now) GET /api/packet-sizes Packet size distribution 
+        // TODO: GET /api/packet-sizes Packet size distribution 
         svr_.Get("/api/packet-sizes", [this, add_cors](const httplib::Request& req, httplib::Response& res) {
             add_cors(res);
             if (!isAuthorized(req)) {

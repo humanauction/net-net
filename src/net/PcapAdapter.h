@@ -50,6 +50,13 @@ public:
     // Source name can be interface or file
     std::string source() const noexcept;
     static bool isValidBpfFilter(const std::string& filter);
+    
+    struct Stats {
+        uint64_t packets_received = 0;
+        uint64_t packets_dropped = 0;
+    };
+
+    Stats getStats() const;
 
 private:
     struct Impl;

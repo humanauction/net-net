@@ -209,3 +209,15 @@ bool PcapAdapter::isValidBpfFilter(const std::string& filter) {
     // All checks passed
     return true;
 }
+
+PcapAdapter::Stats PcapAdapter::getStats() const {
+    Stats stats;
+    if (impl_->handle) {
+        struct pcap_stat ps;
+        if (pcap_stats(impl_->handle, &ps) == 0) {
+            stats.packets_received = ps.ps_recv;
+            stats.packets_dropped = ps.ps_drop;
+        }
+    }
+    return stats;
+}
