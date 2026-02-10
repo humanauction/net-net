@@ -54,6 +54,7 @@ private:
     std::string api_token_;
     std::string api_host_;
     std::uint16_t api_port_;
+    std::string static_files_dir_;
     std::map<std::string, std::string> user_credentials_;
     std::unique_ptr<PcapAdapter> pcap_;
     PcapAdapter::Options opts_;

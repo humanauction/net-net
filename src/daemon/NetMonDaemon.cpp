@@ -86,6 +86,19 @@ void NetMonDaemon::initializeFromConfig(const YAML::Node& config) {
     api_token_ = config["api"]["token"].as<std::string>();
     api_host_ = config["api"]["host"] ? config["api"]["host"].as<std::string>() : "localhost";
     api_port_ = config["api"]["port"] ? config["api"]["port"].as<uint16_t>() : 8082;
+    // Parse static_files_dir with fallback logic
+    if (config["api"]["static_files_dir"]) {
+        static_files_dir_ = config["api"]["static_files_dir"].as<std::string>();
+    } else if (!config_path_.empty()) {
+        // Fallback: use config file's parent directory + "/www"
+        std::filesystem::path config_parent = std::filesystem::path(config_path_).parent_path();
+        static_files_dir_ = (config_parent / "www").string();
+    } else {
+        // In-memory config: use relative path
+        static_files_dir_ = "www";
+    }
+    
+    log("info", "Static files directory: " + static_files_dir_);
 
     // 3. PcapAdapter - Prioritize offline mode
     bool read_offline = config["offline"] && config["offline"]["file"];
@@ -351,6 +364,21 @@ void NetMonDaemon::setupApiRoutes() {
         oss << "}";
 
         res.set_content(oss.str(), "application/json");
+    });
+
+    // Favicon handler to prevent 404s in browser
+    svr_.Get("/favicon.ico", [this](const httplib::Request&, httplib::Response& res) {
+        std::string favicon_path = static_files_dir_ + "/icons/favicon.ico";
+        std::ifstream ifs(favicon_path, std::ios::binary);
+        
+        if (ifs) {
+            std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+            res.set_content(content, "image/x-icon");
+            log("debug", "Served favicon from: " + favicon_path);
+        } else {
+            res.status = 404;
+            log("warn", "Favicon not found at: " + favicon_path);
+        }
     });
 
     svr_.Post("/login", [this, add_cors](const httplib::Request& req, httplib::Response& res) {

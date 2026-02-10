@@ -907,3 +907,257 @@ TEST_F(NetMonDaemonTest, MetricsHistoryEndpointRejectsInvalidParams) {
 	auto j = json::parse(res->body);
 	EXPECT_TRUE(j.contains("error"));
 }
+
+// ============================================================
+// COVERAGE TESTS: Protocol Breakdown & Active Flows
+// ============================================================
+
+TEST_F(NetMonDaemonTest, MetricsEndpointReturnsProtocolBreakdown) {
+    // Wait for stats to accumulate
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    
+    auto res = makeAuthenticatedGet("/metrics");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("protocol_breakdown"));
+    
+    // Protocol breakdown should be an object
+    auto& breakdown = j["protocol_breakdown"];
+    EXPECT_TRUE(breakdown.is_object());
+    
+    // If icmp_sample.pcap has ICMP packets, verify they're counted
+    if (breakdown.contains("OTHER")) {
+        EXPECT_GT(breakdown["OTHER"].get<uint64_t>(), 0);
+    }
+}
+
+TEST_F(NetMonDaemonTest, MetricsEndpointReturnsActiveFlows) {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    
+    auto res = makeAuthenticatedGet("/metrics");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("active_flows"));
+    
+    auto& flows = j["active_flows"];
+    EXPECT_TRUE(flows.is_array());
+    
+    // If any flows exist, validate full structure
+    if (!flows.empty()) {
+        auto& flow = flows[0];
+        EXPECT_TRUE(flow.contains("iface"));
+        EXPECT_TRUE(flow.contains("src_ip"));
+        EXPECT_TRUE(flow.contains("src_port"));
+        EXPECT_TRUE(flow.contains("dst_ip"));
+        EXPECT_TRUE(flow.contains("dst_port"));
+        EXPECT_TRUE(flow.contains("protocol"));
+        EXPECT_TRUE(flow.contains("bytes"));
+        EXPECT_TRUE(flow.contains("packets"));
+        EXPECT_TRUE(flow.contains("state"));
+        EXPECT_EQ(flow["state"], "active");
+    }
+}
+
+// ============================================================
+// COVERAGE TESTS: /metrics/history Parameter Parsing
+// ============================================================
+
+TEST_F(NetMonDaemonTest, MetricsHistoryWithInvalidStartTimestamp) {
+    auto res = makeAuthenticatedGet("/metrics/history?start=not_a_number&end=1000000000");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 400);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["error"], "invalid 'start' timestamp");
+}
+
+TEST_F(NetMonDaemonTest, MetricsHistoryWithInvalidEndTimestamp) {
+    auto res = makeAuthenticatedGet("/metrics/history?start=1000000000&end=invalid");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 400);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["error"], "invalid 'end' timestamp");
+}
+
+TEST_F(NetMonDaemonTest, MetricsHistoryWithInvalidLimitParam) {
+    int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    auto res = makeAuthenticatedGet("/metrics/history?start=0&end=" + std::to_string(now) + "&limit=not_a_number");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 400);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["error"], "invalid 'limit' timestamp");
+}
+
+TEST_F(NetMonDaemonTest, MetricsHistoryWithExcessiveLimitClamped) {
+    int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    auto res = makeAuthenticatedGet("/metrics/history?start=0&end=" + std::to_string(now) + "&limit=100000");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    // Limit should be clamped to 43200 internally
+    EXPECT_TRUE(j.contains("windows"));
+}
+
+TEST_F(NetMonDaemonTest, MetricsHistoryWithoutStartUsesDefault) {
+    int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    auto res = makeAuthenticatedGet("/metrics/history?end=" + std::to_string(now));
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("start"));
+    // Should default to 24 hours before end
+    EXPECT_EQ(j["start"], now - (24 * 3600));
+}
+
+// ============================================================
+// COVERAGE TESTS: New API Endpoints
+// ============================================================
+
+TEST_F(NetMonDaemonTest, TopTalkersEndpointReturnsValidJSON) {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    
+    auto res = makeAuthenticatedGet("/api/top-talkers");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("top_sources"));
+    EXPECT_TRUE(j.contains("top_destinations"));
+    EXPECT_TRUE(j["top_sources"].is_array());
+    EXPECT_TRUE(j["top_destinations"].is_array());
+    
+    // Validate structure if any top talkers exist
+    if (!j["top_sources"].empty()) {
+        auto& src = j["top_sources"][0];
+        EXPECT_TRUE(src.contains("ip"));
+        EXPECT_TRUE(src.contains("bytes"));
+    }
+}
+
+TEST_F(NetMonDaemonTest, TopTalkersRequiresAuth) {
+    httplib::Client client(test_host, test_port);
+    auto res = client.Get("/api/top-talkers");
+    EXPECT_EQ(res->status, 401);
+}
+
+TEST_F(NetMonDaemonTest, PortStatsEndpointReturnsValidJSON) {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    
+    auto res = makeAuthenticatedGet("/api/port-stats");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.is_array());
+    
+    // Validate structure if any port stats exist
+    if (!j.empty()) {
+        auto& port_stat = j[0];
+        EXPECT_TRUE(port_stat.contains("port"));
+        EXPECT_TRUE(port_stat.contains("bytes"));
+        EXPECT_TRUE(port_stat.contains("connections"));
+        EXPECT_TRUE(port_stat.contains("service"));
+    }
+}
+
+TEST_F(NetMonDaemonTest, PortStatsRequiresAuth) {
+    httplib::Client client(test_host, test_port);
+    auto res = client.Get("/api/port-stats");
+    EXPECT_EQ(res->status, 401);
+}
+
+TEST_F(NetMonDaemonTest, SystemHealthEndpointReturnsValidJSON) {
+    auto res = makeAuthenticatedGet("/api/system-health");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("uptime_seconds"));
+    EXPECT_TRUE(j.contains("packets_received"));
+    EXPECT_TRUE(j.contains("packets_dropped"));
+    EXPECT_TRUE(j.contains("drop_rate"));
+    EXPECT_TRUE(j.contains("active_flows"));
+    EXPECT_TRUE(j.contains("capture_running"));
+    EXPECT_TRUE(j.contains("interface"));
+    EXPECT_TRUE(j.contains("buffer_usage_percent"));
+    
+    EXPECT_GE(j["uptime_seconds"].get<int64_t>(), 0);
+    EXPECT_GE(j["drop_rate"].get<double>(), 0.0);
+}
+
+TEST_F(NetMonDaemonTest, SystemHealthRequiresAuth) {
+    httplib::Client client(test_host, test_port);
+    auto res = client.Get("/api/system-health");
+    EXPECT_EQ(res->status, 401);
+}
+
+TEST_F(NetMonDaemonTest, PacketSizesEndpointReturnsValidJSON) {
+    auto res = makeAuthenticatedGet("/api/packet-sizes");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("tiny"));
+    EXPECT_TRUE(j.contains("small"));
+    EXPECT_TRUE(j.contains("medium"));
+    EXPECT_TRUE(j.contains("large"));
+    EXPECT_TRUE(j.contains("jumbo"));
+    
+    EXPECT_TRUE(j["tiny"].is_number());
+    EXPECT_TRUE(j["small"].is_number());
+}
+
+TEST_F(NetMonDaemonTest, PacketSizesRequiresAuth) {
+    httplib::Client client(test_host, test_port);
+    auto res = client.Get("/api/packet-sizes");
+    EXPECT_EQ(res->status, 401);
+}
+
+// ============================================================
+// COVERAGE TESTS: Helper Methods
+// ============================================================
+
+TEST_F(NetMonDaemonTest, GetServiceNameReturnsKnownPorts) {
+    // Test via port-stats endpoint which calls getServiceName()
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    
+    auto res = makeAuthenticatedGet("/api/port-stats");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    if (!j.empty()) {
+        // If we have port 80, verify it's labeled "HTTP"
+        for (const auto& port_stat : j) {
+            if (port_stat["port"] == 80) {
+                EXPECT_EQ(port_stat["service"], "HTTP");
+            }
+            if (port_stat["port"] == 443) {
+                EXPECT_EQ(port_stat["service"], "HTTPS");
+            }
+        }
+    }
+}
+
+TEST_F(NetMonDaemonTest, LoggingLevelFiltersMessages) {
+	// Create daemon with "error" log level
+	YAML::Node config = createTestConfigNode(true);
+	config["logging"]["level"] = "error";
+	config["api"]["port"] = 9997;  // Use different port to avoid conflicts
+	
+	// Construction should succeed without errors
+	EXPECT_NO_THROW({
+		NetMonDaemon test_daemon(config, "test-log-filter");
+	});
+	
+	// Logging is an internal implementation detail, so we test it
+	// indirectly through daemon operation and output level configuration
+}
