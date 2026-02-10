@@ -5,7 +5,7 @@ import time
 
 packets = []
 base_time = int(time.time())
-for i in range(10):
+for i in range(100):
     pkt = (
         Ether()
         / IP(src="10.0.0.1", dst="10.0.0.2")
