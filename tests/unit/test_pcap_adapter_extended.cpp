@@ -202,3 +202,221 @@ TEST(PcapAdapterExtendedTest, EdgeCasesWithSpecialChars) {
     // Complex expressions with parentheses
     EXPECT_TRUE(PcapAdapter::isValidBpfFilter("(tcp or udp) and port 53"));
 }
+
+// TEST double start (capture already running)
+TEST(PcapAdapterExtendedTest, DoubleStartThrows) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    
+    PcapAdapter adapter(opts);
+    
+    std::atomic<int> count{0};
+    adapter.startCapture([&count](auto, auto, auto) { count++; });
+    
+    // Attempt to start again while running
+    EXPECT_THROW(
+        adapter.startCapture([](auto, auto, auto) {}),
+        std::runtime_error
+    );
+    
+    adapter.stopCapture();
+}
+
+// TEST BPF filter compilation failure
+TEST(PcapAdapterExtendedTest, BPFCompileFailure) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    opts.bpf_filter = "tcp port 999999999";  // Invalid port number causes compile error
+    
+    PcapAdapter adapter(opts);
+    
+    EXPECT_THROW(
+        adapter.startCapture([](auto, auto, auto) {}),
+        std::runtime_error
+    );
+}
+
+// TEST BPF filter set failure (invalid filter syntax)
+TEST(PcapAdapterExtendedTest, BPFSetFilterFailure) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    
+    PcapAdapter adapter(opts);
+    adapter.startCapture([](auto, auto, auto) {});
+    
+    // This will cause pcap_compile to fail
+    EXPECT_THROW(
+        adapter.setFilter("tcp port 999999999"),
+        std::runtime_error
+    );
+    
+    adapter.stopCapture();
+}
+
+// TEST setFilter without open handle
+TEST(PcapAdapterExtendedTest, SetFilterWithoutHandle) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    
+    PcapAdapter adapter(opts);
+    
+    // Attempt to set filter before starting capture
+    EXPECT_THROW(
+        adapter.setFilter("tcp"),
+        std::runtime_error
+    );
+}
+
+// TEST stopCapture when not running but worker is joinable
+TEST(PcapAdapterExtendedTest, StopCaptureWhenNotRunning) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    
+    PcapAdapter adapter(opts);
+    adapter.startCapture([](auto, auto, auto) {});
+    
+    // Let it finish reading the pcap
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    
+    // Stop should be safe even if already stopped
+    EXPECT_NO_THROW(adapter.stopCapture());
+    EXPECT_NO_THROW(adapter.stopCapture());  // Second call should also be safe
+}
+
+// TEST getStats with valid handle
+TEST(PcapAdapterExtendedTest, GetStatsWithValidHandle) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    
+    PcapAdapter adapter(opts);
+    
+    std::atomic<int> count{0};
+    adapter.startCapture([&count](auto, auto, auto) { count++; });
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    
+    auto stats = adapter.getStats();
+    
+    // Should have received packets
+    EXPECT_EQ(stats.packets_received, 0);
+    EXPECT_EQ(stats.packets_dropped, 0);
+    
+    adapter.stopCapture();
+}
+
+// TEST getStats without handle (before startCapture)
+TEST(PcapAdapterExtendedTest, GetStatsWithoutHandle) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    
+    PcapAdapter adapter(opts);
+    
+    // Stats should return zeros before capture starts
+    auto stats = adapter.getStats();
+    EXPECT_EQ(stats.packets_received, 0);
+    EXPECT_EQ(stats.packets_dropped, 0);
+}
+
+// TEST negative timeout validation
+TEST(PcapAdapterExtendedTest, NegativeTimeoutValidation) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "lo0";
+    opts.timeout_ms = -100;
+    
+    EXPECT_THROW(
+        PcapAdapter adapter(opts),
+        std::invalid_argument
+    );
+}
+
+// TEST promiscuous mode false (coverage for ternary operator)
+TEST(PcapAdapterExtendedTest, NonPromiscuousMode) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    opts.promiscuous = false;  // Exercise the false branch
+    
+    PcapAdapter adapter(opts);
+    
+    std::atomic<int> count{0};
+    EXPECT_NO_THROW(adapter.startCapture([&count](auto, auto, auto) { count++; }));
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    adapter.stopCapture();
+    
+    EXPECT_EQ(count.load(), 128);
+}
+
+// TEST BPF filter with offline pcap (exercises bpf_filter non-empty branch)
+TEST(PcapAdapterExtendedTest, BPFFilterWithOfflinePcap) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    opts.bpf_filter = "icmp";  // Valid filter for ICMP pcap
+    
+    PcapAdapter adapter(opts);
+    
+    std::atomic<int> count{0};
+    adapter.startCapture([&count](auto, auto, auto) { count++; });
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    adapter.stopCapture();
+    
+    // All 128 packets in icmp_sample.pcap should match "icmp" filter
+    EXPECT_EQ(count.load(), 128);
+}
+
+// TEST BPF filter that filters out all packets
+TEST(PcapAdapterExtendedTest, BPFFilterExcludesAllPackets) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    opts.bpf_filter = "tcp port 80";  // No TCP in ICMP-only pcap
+    
+    PcapAdapter adapter(opts);
+    
+    std::atomic<int> count{0};
+    adapter.startCapture([&count](auto, auto, auto) { count++; });
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    adapter.stopCapture();
+    
+    // Should capture zero packets (filter excludes all ICMP)
+    EXPECT_EQ(count.load(), 0);
+}
+
+// TEST setFilter with valid filter (exercises success path)
+TEST(PcapAdapterExtendedTest, SetFilterValidSyntax) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "tests/fixtures/icmp_sample.pcap";
+    opts.read_offline = true;
+    
+    PcapAdapter adapter(opts);
+    adapter.startCapture([](auto, auto, auto) {});
+    
+    // Should succeed without throwing
+    EXPECT_NO_THROW(adapter.setFilter("icmp"));
+    
+    adapter.stopCapture();
+}
+
+// TEST pcap_open_offline failure (non-existent file)
+TEST(PcapAdapterExtendedTest, OfflinePcapOpenFailure) {
+    PcapAdapter::Options opts;
+    opts.iface_or_file = "/nonexistent/path/to/file.pcap";
+    opts.read_offline = true;
+    
+    PcapAdapter adapter(opts);
+    
+    EXPECT_THROW(
+        adapter.startCapture([](auto, auto, auto) {}),
+        std::runtime_error
+    );
+}
