@@ -64,6 +64,7 @@ The project includes a comprehensive Makefile with the following targets:
 | `make build` | Build the project |
 | `make rebuild` | Clean and rebuild |
 | `make demon` | Run daemon with live capture (requires sudo) |
+| `make demon-stop` | Stop running daemon |
 | `make demon-ol` | Run daemon with PCAP file replay |
 | `make test` | Run ALL tests (C++ + Python) |
 | `make test-cpp` | Run C++ tests only |
