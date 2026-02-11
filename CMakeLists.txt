@@ -382,3 +382,51 @@ target_link_libraries(test_pcap_adapter_extended
         pthread
 )
 add_test(NAME test_pcap_adapter_extended COMMAND test_pcap_adapter_extended)
+
+# ============================================================
+# INTEGRATION TEST: NETMON ERROR PATHS
+# ============================================================
+add_executable(test_netmon_error_paths
+    tests/integration/test_netmon_error_paths.cpp
+)
+
+target_include_directories(test_netmon_error_paths
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
+)
+
+target_link_libraries(test_netmon_error_paths
+    PRIVATE
+        netnet-daemon-lib
+        GTest::gtest
+        GTest::gtest_main
+        ${EXTRA_LIBS}
+)
+
+add_test(NAME test_netmon_error_paths COMMAND test_netmon_error_paths)
+
+# ============================================================
+# INTEGRATION TEST: API ERROR PATHS
+# ============================================================
+add_executable(test_api_error_paths
+    tests/integration/test_api_error_paths.cpp
+)
+
+target_include_directories(test_api_error_paths
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
+)
+
+target_link_libraries(test_api_error_paths
+    PRIVATE
+        netnet-daemon-lib
+        GTest::gtest
+        GTest::gtest_main
+        ${EXTRA_LIBS}
+)
+
+add_test(NAME test_api_error_paths COMMAND test_api_error_paths)
