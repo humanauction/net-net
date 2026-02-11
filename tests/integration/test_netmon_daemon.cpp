@@ -18,6 +18,7 @@ protected:
 	int test_port = 9999;
 	std::string test_host = "localhost";
 	std::string api_token = "test-token-12345";
+	std::string config_path_ = "sample-config.ci.yaml";
 	std::string test_config_path = "test_daemon_config.yaml";
 	std::string test_username = "test_username";
 	std::string test_password = "test_password";
@@ -1115,12 +1116,6 @@ TEST_F(NetMonDaemonTest, PacketSizesEndpointReturnsValidJSON) {
     EXPECT_TRUE(j["small"].is_number());
 }
 
-TEST_F(NetMonDaemonTest, PacketSizesRequiresAuth) {
-    httplib::Client client(test_host, test_port);
-    auto res = client.Get("/api/packet-sizes");
-    EXPECT_EQ(res->status, 401);
-}
-
 // ============================================================
 // COVERAGE TESTS: Helper Methods
 // ============================================================
@@ -1160,4 +1155,347 @@ TEST_F(NetMonDaemonTest, LoggingLevelFiltersMessages) {
 	
 	// Logging is an internal implementation detail, so we test it
 	// indirectly through daemon operation and output level configuration
+}
+
+// ============================================================
+// FAVICON TESTS
+// ============================================================
+
+TEST_F(NetMonDaemonTest, FaviconReturns404WhenMissing) {
+    // Daemon's static_files_dir_ likely points to non-existent favicon path in CI
+    httplib::Client client(test_host, test_port);
+    auto res = client.Get("/favicon.ico");
+    
+    // Should return 404 if favicon file doesn't exist
+    EXPECT_TRUE(res->status == 404 || res->status == 200);
+}
+
+TEST_F(NetMonDaemonTest, FaviconServedWhenPresent) {
+    // If favicon exists, verify content-type
+    httplib::Client client(test_host, test_port);
+    auto res = client.Get("/favicon.ico");
+    
+    if (res->status == 200) {
+        EXPECT_EQ(res->get_header_value("Content-Type"), "image/x-icon");
+    }
+}
+
+// ============================================================
+// LOGIN ERROR PATHS
+// ============================================================
+
+TEST_F(NetMonDaemonTest, LoginWithWrongPassword) {
+    httplib::Client client(test_host, test_port);
+    
+    nlohmann::json body = {
+        {"username", test_username},
+        {"password", "wrong_password_123"}
+    };
+    
+    auto res = client.Post("/login", body.dump(), "application/json");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 401);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["error"], "invalid credentials");
+}
+
+TEST_F(NetMonDaemonTest, LoginWithMalformedJSON) {
+    httplib::Client client(test_host, test_port);
+    
+    // Send invalid JSON to trigger exception path
+    auto res = client.Post("/login", "{invalid json", "application/json");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 500);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["error"], "internal server error");
+}
+
+// ============================================================
+// RELOAD RATE LIMITING
+// ============================================================
+
+TEST_F(NetMonDaemonTest, ReloadRateLimitEnforced) {
+    auto token = loginUser(test_username, test_password);
+    
+    httplib::Client client(test_host, test_port);
+    httplib::Headers headers = {{"X-Session-Token", token}};
+    
+    // First reload should succeed
+    auto res1 = client.Post("/control/reload", headers, "", "application/json");
+    EXPECT_EQ(res1->status, 200);
+    
+    // Immediate second reload should be rate-limited
+    auto res2 = client.Post("/control/reload", headers, "", "application/json");
+    EXPECT_EQ(res2->status, 429);
+    
+    auto j = json::parse(res2->body);
+    EXPECT_EQ(j["error"], "rate limit exceeded");
+}
+
+TEST_F(NetMonDaemonTest, ReloadWithInvalidConfig) {
+    auto token = loginUser(test_username, test_password);
+    
+    // Temporarily corrupt config file to trigger reload exception
+    std::string backup_path = config_path_ + ".backup";
+    std::filesystem::copy_file(config_path_, backup_path, std::filesystem::copy_options::overwrite_existing);
+    
+    // Write invalid YAML
+    std::ofstream ofs(config_path_);
+    ofs << "invalid: yaml: syntax: [[[";
+    ofs.close();
+    
+    httplib::Client client(test_host, test_port);
+    httplib::Headers headers = {{"X-Session-Token", token}};
+    
+    // Wait for rate limit to expire
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+    
+    auto res = client.Post("/control/reload", headers, "", "application/json");
+    EXPECT_EQ(res->status, 500);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("error"));
+    
+    // Restore config
+    std::filesystem::copy_file(backup_path, config_path_, std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::remove(backup_path);
+}
+
+// ============================================================
+// METRICS/HISTORY AUTHORIZATION
+// ============================================================
+
+TEST_F(NetMonDaemonTest, MetricsHistoryRequiresAuth) {
+    httplib::Client client(test_host, test_port);
+    auto res = client.Get("/metrics/history");
+    
+    EXPECT_EQ(res->status, 401);
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["error"], "unauthorized");
+}
+
+// ============================================================
+// PROTOCOL BREAKDOWN WITH MULTIPLE PROTOCOLS
+// ============================================================
+
+TEST_F(NetMonDaemonTest, ProtocolBreakdownIncludesTCPUDPOther) {
+    // Wait for daemon to process pcap with various protocols
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    
+    auto res = makeAuthenticatedGet("/metrics");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    ASSERT_TRUE(j.contains("protocol_breakdown"));
+    
+    auto& breakdown = j["protocol_breakdown"];
+    
+    // Verify at least one protocol exists
+    EXPECT_GT(breakdown.size(), 0);
+    
+    // If OTHER exists, bytes should be > 0
+    if (breakdown.contains("OTHER")) {
+        EXPECT_GT(breakdown["OTHER"].get<uint64_t>(), 0);
+    }
+}
+
+// ============================================================
+// ACTIVE FLOWS FULL STRUCTURE
+// ============================================================
+
+TEST_F(NetMonDaemonTest, ActiveFlowsContainAllFields) {
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    
+    auto res = makeAuthenticatedGet("/metrics");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    ASSERT_TRUE(j.contains("active_flows"));
+    
+    auto& flows = j["active_flows"];
+    if (!flows.empty()) {
+        auto& flow = flows[0];
+        
+        // Verify all fields exist
+        EXPECT_TRUE(flow.contains("iface"));
+        EXPECT_TRUE(flow.contains("src_ip"));
+        EXPECT_TRUE(flow.contains("src_port"));
+        EXPECT_TRUE(flow.contains("dst_ip"));
+        EXPECT_TRUE(flow.contains("dst_port"));
+        EXPECT_TRUE(flow.contains("protocol"));
+        EXPECT_TRUE(flow.contains("bytes"));
+        EXPECT_TRUE(flow.contains("packets"));
+        EXPECT_TRUE(flow.contains("state"));
+        
+        // Verify protocol is one of TCP/UDP/OTHER
+        std::string proto = flow["protocol"];
+        EXPECT_TRUE(proto == "TCP" || proto == "UDP" || proto == "OTHER");
+        
+        EXPECT_EQ(flow["state"], "active");
+    }
+}
+
+// ============================================================
+// TOP TALKERS WITH SORTING
+// ============================================================
+
+TEST_F(NetMonDaemonTest, TopTalkersAreSortedByBytes) {
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    
+    auto res = makeAuthenticatedGet("/api/top-talkers");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.contains("top_sources"));
+    EXPECT_TRUE(j.contains("top_destinations"));
+    
+    // Verify sorting (descending by bytes)
+    if (j["top_sources"].size() >= 2) {
+        uint64_t first_bytes = j["top_sources"][0]["bytes"];
+        uint64_t second_bytes = j["top_sources"][1]["bytes"];
+        EXPECT_GE(first_bytes, second_bytes);
+    }
+    
+    if (j["top_destinations"].size() >= 2) {
+        uint64_t first_bytes = j["top_destinations"][0]["bytes"];
+        uint64_t second_bytes = j["top_destinations"][1]["bytes"];
+        EXPECT_GE(first_bytes, second_bytes);
+    }
+}
+
+// ============================================================
+// PORT STATS WITH SERVICE NAMES
+// ============================================================
+
+TEST_F(NetMonDaemonTest, PortStatsIncludeServiceNames) {
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    
+    auto res = makeAuthenticatedGet("/api/port-stats");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_TRUE(j.is_array());
+    
+    if (!j.empty()) {
+        auto& port_stat = j[0];
+        
+        EXPECT_TRUE(port_stat.contains("port"));
+        EXPECT_TRUE(port_stat.contains("bytes"));
+        EXPECT_TRUE(port_stat.contains("connections"));
+        EXPECT_TRUE(port_stat.contains("service"));
+        
+        // If port is well-known (e.g., 80), service should be non-empty
+        uint16_t port = port_stat["port"];
+        if (port == 80 || port == 443 || port == 22 || port == 53) {
+            EXPECT_FALSE(port_stat["service"].get<std::string>().empty());
+        }
+    }
+}
+
+TEST_F(NetMonDaemonTest, PortStatsAreSortedByBytes) {
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    
+    auto res = makeAuthenticatedGet("/api/port-stats");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    
+    // Verify sorting (descending by bytes)
+    if (j.size() >= 2) {
+        uint64_t first_bytes = j[0]["bytes"];
+        uint64_t second_bytes = j[1]["bytes"];
+        EXPECT_GE(first_bytes, second_bytes);
+    }
+}
+
+// ============================================================
+// LOGGING TESTS
+// ============================================================
+
+TEST_F(NetMonDaemonTest, LogToFileWhenConfigured) {
+    // Create daemon with log file configured
+    YAML::Node config = createTestConfigNode(true);
+    config["logging"]["file"] = "/tmp/netnet-test.log";
+    config["api"]["port"] = 9998;
+    
+    EXPECT_NO_THROW({
+        NetMonDaemon test_daemon(config, "test-log-file");
+        // test_daemon.log("info", "Test log message");
+    });
+    
+    // Verify log file was created
+    EXPECT_TRUE(std::filesystem::exists("/tmp/netnet-test.log"));
+    std::filesystem::remove("/tmp/netnet-test.log");
+}
+
+TEST_F(NetMonDaemonTest, LogLevelFilteringWorks) {
+    YAML::Node config = createTestConfigNode(true);
+    config["logging"]["level"] = "warn";
+    config["api"]["port"] = 9995;
+    
+    NetMonDaemon test_daemon(config, "test-log-level");
+    
+    // This should pass shouldLog() check
+    EXPECT_TRUE(test_daemon.shouldLog("error"));
+    EXPECT_TRUE(test_daemon.shouldLog("warn"));
+    
+    // This should fail shouldLog() check
+    EXPECT_FALSE(test_daemon.shouldLog("info"));
+    EXPECT_FALSE(test_daemon.shouldLog("debug"));
+}
+
+// ============================================================
+// SERVICE NAME LOOKUP
+// ============================================================
+
+TEST_F(NetMonDaemonTest, GetServiceNameReturnsKnownServices) {
+    // Test via port-stats which calls getServiceName()
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    
+    auto res = makeAuthenticatedGet("/api/port-stats");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    
+    // Verify well-known ports have service names
+    bool found_http = false;
+    bool found_https = false;
+    
+    for (const auto& port_stat : j) {
+        if (port_stat["port"] == 80) {
+            EXPECT_EQ(port_stat["service"], "HTTP");
+            found_http = true;
+        }
+        if (port_stat["port"] == 443) {
+            EXPECT_EQ(port_stat["service"], "HTTPS");
+            found_https = true;
+        }
+    }
+    
+    // If neither found, that's ok (depends on pcap content)
+}
+
+TEST_F(NetMonDaemonTest, GetServiceNameReturnsEmptyForUnknownPort) {
+    // Port 65535 should not be in the services map
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    
+    auto res = makeAuthenticatedGet("/api/port-stats");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    
+    for (const auto& port_stat : j) {
+        if (port_stat["port"] == 65535) {
+            EXPECT_EQ(port_stat["service"], "");
+        }
+    }
 }

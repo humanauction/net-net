@@ -22,7 +22,6 @@ class NetMonDaemon {
 public:
     NetMonDaemon(const std::string& config_path);
     NetMonDaemon(const YAML::Node& config, const std::string& config_name = "in-memory-config");
-
     ~NetMonDaemon();
 
     void run();
@@ -30,6 +29,9 @@ public:
     void setRunning(bool value) { running_ = value; }
     bool isRunning() const { return running_.load(); }
     static void signalHandler(int signum);
+
+    friend class NetMonDaemonTest;
+    
 private:
     void initializeFromConfig(const YAML::Node& config);
     void log(const std::string& level, const std::string& msg) const;
