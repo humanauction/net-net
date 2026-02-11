@@ -29,10 +29,9 @@ public:
     void setRunning(bool value) { running_ = value; }
     bool isRunning() const { return running_.load(); }
     static void signalHandler(int signum);
-
-    friend class NetMonDaemonTest;
     
 private:
+    friend class NetMonDaemonTest;
     void initializeFromConfig(const YAML::Node& config);
     void log(const std::string& level, const std::string& msg) const;
     void setupApiRoutes();
