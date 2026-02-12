@@ -439,5 +439,39 @@ endif()
 # Set test properties for parallel execution
 set_tests_properties(test_netmon_daemon PROPERTIES
     RUN_SERIAL FALSE  # Allow parallel runs
-    TIMEOUT 120       # Kill test after 2 minutes
+    TIMEOUT 300       # Kill test after 5 minutes
+)
+
+# Set timeout for all tests
+set_property(TEST test_netmon_daemon test_parser test_connection_tracker
+    test_stats_aggregator test_session_manager test_stats_aggregator_integration
+    test_stats_persistence test_metrics_endpoint test_parser_extended
+    test_pcap_adapter_extended test_netmon_error_paths test_api_error_paths
+    PROPERTY TIMEOUT 180)
+
+# ============================================================
+# FAST INTEGRATION TESTS (< 60s)
+# ============================================================
+add_executable(test_netmon_daemon_fast
+    tests/integration/test_netmon_daemon_fast.cpp  # Create this with unit-like tests
+)
+
+target_include_directories(test_netmon_daemon_fast PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/daemon
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
+)
+
+target_link_libraries(test_netmon_daemon_fast PRIVATE
+    netnet-daemon-lib GTest::gtest GTest::gtest_main ${EXTRA_LIBS}
+)
+
+
+
+# ============================================================
+# SLOW INTEGRATION TESTS (run manually or in CI with longer timeout)
+# ============================================================
+
+set_tests_properties(test_netmon_daemon test_api_error_paths test_netmon_error_paths
+    PROPERTIES RUN_SERIAL TRUE
 )

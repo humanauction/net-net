@@ -65,34 +65,17 @@ protected:
 	
 	void SetUp() override {
 		try {
-			YAML::Node config;  // Offline mode
-			// OFFLINE MODE - No sudo needed
-        	config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
-
-			config["stats"]["window_size"] = 1;
-			config["stats"]["history_depth"] = 2;
-			config["database"]["path"] = ":memory:";
-			config["api"]["token"] = api_token;
-			config["api"]["host"] = test_host;
-			config["api"]["port"] = test_port;
-			config["api"]["session_expiry"] = 60;
-			config["logging"]["level"] = "error";
-			
-			YAML::Node user;
-			user["username"] = test_username;
-			user["password"] = test_password;
-			config["users"].push_back(user);
-
+			YAML::Node config = createTestConfigNode(true);
 			daemon = std::make_unique<NetMonDaemon>(config, "test-daemon-fast");
 			
 			daemon_thread = std::thread([this]() {
 				daemon->run();
 			});
 			
-			// Wait for API server
+			// REDUCE: 10 retries × 500ms = 5s max (was 20 retries × 1000ms = 20s)
 			int retries = 0;
 			bool ready = false;
-			while (retries < 20 && !ready) {
+			while (retries < 10 && !ready) {
 				try {
 					httplib::Client client(test_host, test_port);
 					client.set_read_timeout(1, 0);
@@ -102,12 +85,12 @@ protected:
 						break;
 					}
 				} catch (...) {}
-				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+				std::this_thread::sleep_for(std::chrono::milliseconds(500));  // ✅ Was 1000ms
 				retries++;
 			}
 			
 			if (!ready) {
-				throw std::runtime_error("Daemon failed to start within 2 seconds");
+				throw std::runtime_error("Daemon failed to start within 5 seconds");
 			}
 			
 		} catch (const std::exception& ex) {
@@ -179,9 +162,8 @@ TEST_F(NetMonDaemonTest, DaemonStartsSuccessfully) {
 
 
 TEST_F(NetMonDaemonTest, MetricsHistoryEndpointReturnsValidJSON) {
-    // Wait for stats processing (offline pcap already loaded)
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
+    // ❌ DELETE: std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    
     int64_t start = 0;
     int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::string url = "/metrics/history?start=" + std::to_string(start) + 
@@ -1289,9 +1271,7 @@ TEST_F(NetMonDaemonTest, MetricsHistoryRequiresAuth) {
 // ============================================================
 
 TEST_F(NetMonDaemonTest, ProtocolBreakdownIncludesTCPUDPOther) {
-    // Wait for daemon to process pcap with various protocols
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     auto res = makeAuthenticatedGet("/metrics");
     ASSERT_TRUE(res != nullptr);
     EXPECT_EQ(res->status, 200);

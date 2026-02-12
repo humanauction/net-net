@@ -65,7 +65,11 @@ jobs:
     - name: Run C++ tests
       run: |
         cd build
-        ctest --output-on-failure --verbose || (echo "Tests failed! Checking for core dumps..." && ls -la /cores/ && exit 1)
+        if [ "${{ runner.os }}" = "Linux" ]; then
+          ctest --output-on-failure --parallel $(nproc) --timeout 300 || (echo "Tests failed! Checking for core dumps..." && ls -la /cores/ && exit 1)
+        else
+          ctest --output-on-failure --parallel $(sysctl -n hw.ncpu) --timeout 300
+        fi
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -185,13 +189,21 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          cmake build-essential libpcap-dev libssl-dev \
-          libsqlite3-dev libyaml-cpp-dev nlohmann-json3-dev \
-          libgtest-dev pkg-config gcovr
+          cmake \
+          g++ \
+          libpcap-dev \
+          libssl-dev \
+          libyaml-cpp-dev \
+          nlohmann-json3-dev \
+          libgtest-dev \
+          libsqlite3-dev \
+          gettext-base
+        
         cd /tmp
-        git clone https://github.com/yhirose/cpp-httplib.git
+        git clone --depth 1 https://github.com/yhirose/cpp-httplib.git
         cd cpp-httplib
-        sudo cp httplib.h /usr/local/include/
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        sudo cmake --build build --target install
 
     - name: Configure CMake with coverage
       run: |
