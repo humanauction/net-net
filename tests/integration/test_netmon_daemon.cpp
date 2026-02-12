@@ -18,7 +18,7 @@ protected:
 	int test_port = 9999;
 	std::string test_host = "localhost";
 	std::string api_token = "test-token-12345";
-	std::string config_path_ = "examples/sample-config.ci.yaml";
+	std::string config_path_ = "examples/sample-config.yaml";
 	std::string test_config_path = "test_daemon_config.yaml";
 	std::string test_username = "test_username";
 	std::string test_password = "test_password";

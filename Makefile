@@ -65,7 +65,7 @@ build:
 	@echo "==> Configuring (type=$(BUILD_TYPE))..."
 	@$(CMAKE) -S . -B "$(BUILD_DIR)" -G "Unix Makefiles" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)"
 	@echo "==> Building..."
-	@$(CMAKE) --build "$(BUILD_DIR)" -- -j$(sysctl -n hw.ncpu)
+	@$(CMAKE) --build "$(BUILD_DIR)" -- -j$(shell sysctl -n hw.ncpu)
 rebuild: clean build
 
 .PHONY: clean-coverage
@@ -80,7 +80,7 @@ rebuild-coverage: clean
 		-DCMAKE_BUILD_TYPE=Debug \
 		-DCMAKE_CXX_FLAGS="--coverage -g -O0" \
 		-DCMAKE_EXE_LINKER_FLAGS="--coverage"
-	@$(CMAKE) --build "$(BUILD_DIR)" -- -j$(sysctl -n hw.ncpu)
+	@$(CMAKE) --build "$(BUILD_DIR)" -- -j$(shell sysctl -n hw.ncpu)
 	@echo "==> Copying test fixtures..."
 	@mkdir -p "$(BUILD_DIR)/tests/fixtures"
 	@cp -r tests/fixtures/* "$(BUILD_DIR)/tests/fixtures/"
