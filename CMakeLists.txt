@@ -430,3 +430,14 @@ target_link_libraries(test_api_error_paths
 )
 
 add_test(NAME test_api_error_paths COMMAND test_api_error_paths)
+
+# Enable parallel test execution
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.17)
+    list(APPEND CMAKE_CTEST_ARGUMENTS "--parallel ${CMAKE_BUILD_PARALLEL_LEVEL}")
+endif()
+
+# Set test properties for parallel execution
+set_tests_properties(test_netmon_daemon PROPERTIES
+    RUN_SERIAL FALSE  # Allow parallel runs
+    TIMEOUT 120       # Kill test after 2 minutes
+)

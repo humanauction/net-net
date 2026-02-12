@@ -132,7 +132,7 @@ test: config-ci venv build
 
 test-cpp: build
 	@echo "==> Running C++ tests only..."
-	@cd "$(BUILD_DIR)" && ctest --output-on-failure --verbose
+	@cd "$(BUILD_DIR)" && ctest --output-on-failure --parallel $(shell sysctl -n hw.ncpu)--verbose
 
 test-python: config-ci venv
 	@echo "==> Running Python tests only..."
