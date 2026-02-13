@@ -13,144 +13,139 @@ using json = nlohmann::json;
 
 class NetMonDaemonTest : public ::testing::Test {
 protected:
-	std::unique_ptr<NetMonDaemon> daemon;
-	std::thread daemon_thread;
-	int test_port = 9999;
-	std::string test_host = "localhost";
-	std::string api_token = "test-token-12345";
-	std::string config_path_ = "";
-	std::string test_config_path = "test_daemon_config.yaml";
-	std::string test_username = "test_username";
-	std::string test_password = "test_password";
-	std::string session_token;
-	
-	// ✅ Create test config with offline mode
-	YAML::Node createTestConfigNode(bool use_offline = true) {
-		YAML::Node config;
-		
-		if (use_offline) {
-			config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
-		} else {
-			// Live capture (requires sudo)
-			config["interface"]["name"] = "lo0";
-			config["interface"]["promiscuous"] = false;
-			config["interface"]["snaplen"] = 1500;
-			config["interface"]["timeout_ms"] = 100;
-		}
-		
-		// Stats window (1 second)
-		config["stats"]["window_size"] = 1;
-		config["stats"]["history_depth"] = 2;
-		
-		// In-memory database (no disk I/O)
-		config["database"]["path"] = ":memory:";
-		
-		// API config
-		config["api"]["token"] = api_token;
-		config["api"]["host"] = test_host;
-		config["api"]["port"] = test_port;
-		config["api"]["session_expiry"] = 60;
-		
-		// Disable logging for tests
-		config["logging"]["level"] = "error";
-		
-		// Single test user
-		YAML::Node user;
-		user["username"] = test_username;
-		user["password"] = test_password;
-		config["users"].push_back(user);
-		
-		return config;
-	}
-	
-	void SetUp() override {
-		try {
-			YAML::Node config = createTestConfigNode(true);
-			daemon = std::make_unique<NetMonDaemon>(config, "test-daemon-fast");
-			
-			daemon_thread = std::thread([this]() {
-				daemon->run();
-			});
-			
-			// REDUCE: 10 retries × 500ms = 5s max (was 20 retries × 1000ms = 20s)
-			int retries = 0;
-			bool ready = false;
-			while (retries < 10 && !ready) {
-				try {
-					httplib::Client client(test_host, test_port);
-					client.set_read_timeout(1, 0);
-					auto res = client.Get("/metrics?token=" + api_token);
-					if (res && res->status > 0) {
-						ready = true;
-						break;
-					}
-				} catch (...) {}
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));  // ✅ Was 1000ms
-				retries++;
-			}
-			
-			if (!ready) {
-				throw std::runtime_error("Daemon failed to start within 5 seconds");
-			}
-			
-		} catch (const std::exception& ex) {
-			std::cerr << "SetUp failed: " << ex.what() << std::endl;
-			throw;
-		}
-	}
-	
-	void TearDown() override {
-		if (daemon) {
-			daemon->stop();
-		}
-		if (daemon_thread.joinable()) {
-			daemon_thread.join();
-		}
-	}
-	
-	// HELPER: Login and return session token
-	std::string loginUser(const std::string& username, const std::string& password) {
-		httplib::Client client(test_host, test_port);
-		nlohmann::json body = {
-			{"username", username},
-			{"password", password}
-		};
-		
-		auto res = client.Post("/login", body.dump(), "application/json");
-		if (res && res->status == 200) {
-			auto j = nlohmann::json::parse(res->body);
-			return j["token"].get<std::string>();
-		}
-		return "";
-	}
-	
-	// HELPER: GET with session token
-	httplib::Result makeSessionGet(const std::string& path, const std::string& token) {
-		httplib::Client client(test_host, test_port);
-		httplib::Headers headers = {{"X-Session-Token", token}};
-		return client.Get(path, headers);
-	}
-	
-	// HELPER: Authenticated GET (uses API token)
-	httplib::Result makeAuthenticatedGet(const std::string& path) {
-		if (session_token.empty()) {
-			session_token = loginUser(test_username, test_password);
-		}
-		
-		httplib::Client client(test_host, test_port);
-		httplib::Headers headers = {{"X-Session-Token", session_token}};
-		return client.Get(path, headers);
-	}
-	
-	// HELPER: Authenticated POST (uses API token)
-	httplib::Result makeAuthenticatedPost(const std::string& path, const std::string& body = "") {
-		httplib::Client client(test_host, test_port);
-		httplib::Headers headers = {
-			{"Authorization", "Bearer " + api_token}
-		};
-		return client.Post(path, headers, body, "application/json");
-	}
+    // Static daemon shared across all tests
+    static std::unique_ptr<NetMonDaemon> daemon;
+    static std::thread daemon_thread;
+    static int test_port;
+    static std::string test_host;
+    static std::string api_token;
+    static std::string test_username;
+    static std::string test_password;
+    std::string config_path_;
+    
+    std::string session_token;  // Per-test session token
+    
+    // HELPER: Create test config node
+    static YAML::Node createTestConfigNode(bool with_offline = true) {
+        YAML::Node config;
+
+        if (with_offline) {
+            config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+        } else {
+            config["interface"]["name"] = "lo0";
+        }
+        config["stats"]["window_size"] = 1;
+        config["stats"]["history_depth"] = 2;
+        config["database"]["path"] = ":memory:";
+        config["api"]["token"] = "test-token-12345";
+        config["api"]["host"] = "localhost";
+        config["api"]["port"] = 9999;
+        config["api"]["session_expiry"] = 60;
+        config["logging"]["level"] = "error";
+        
+        YAML::Node user;
+        user["username"] = "test_username";
+        user["password"] = "test_password";
+        config["users"].push_back(user);
+        
+        return config;
+    }
+    // START DAEMON ONCE FOR ALL TESTS
+    static void SetUpTestSuite() {
+        test_port = 9999;
+        test_host = "localhost";
+        api_token = "test-token-12345";
+        test_username = "test_username";
+        test_password = "test_password";
+        
+        YAML::Node config = createTestConfigNode(true);
+        
+        daemon = std::make_unique<NetMonDaemon>(config, "test-daemon-shared");
+        daemon_thread = std::thread([]() { daemon->run(); });
+        
+        // Wait for daemon startup (only once)
+        for (int i = 0; i < 10; ++i) {
+            try {
+                httplib::Client client(test_host, test_port);
+                client.set_read_timeout(1, 0);
+                auto res = client.Get("/metrics?token=" + api_token);
+                if (res && res->status > 0) break;
+            } catch (...) {}
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+    }
+    
+    // STOP DAEMON AFTER ALL TESTS
+    static void TearDownTestSuite() {
+        if (daemon) {
+            daemon->stop();
+        }
+        if (daemon_thread.joinable()) {
+            daemon_thread.join();
+        }
+    }
+    
+    // PER-TEST SETUP: only resets session token
+    void SetUp() override {
+        session_token.clear();
+    }
+    
+    void TearDown() override {
+        // No per-test cleanup needed
+    }
+    
+    // HELPER: Login and return session token
+    std::string loginUser(const std::string& username, const std::string& password) {
+        httplib::Client client(test_host, test_port);
+        nlohmann::json body = {
+            {"username", username},
+            {"password", password}
+        };
+        
+        auto res = client.Post("/login", body.dump(), "application/json");
+        if (res && res->status == 200) {
+            auto j = nlohmann::json::parse(res->body);
+            return j["token"].get<std::string>();
+        }
+        return "";
+    }
+    
+    // HELPER: GET with session token
+    httplib::Result makeSessionGet(const std::string& path, const std::string& token) {
+        httplib::Client client(test_host, test_port);
+        httplib::Headers headers = {{"X-Session-Token", token}};
+        return client.Get(path, headers);
+    }
+    
+    // HELPER: Authenticated GET (uses API token)
+    httplib::Result makeAuthenticatedGet(const std::string& path) {
+        if (session_token.empty()) {
+            session_token = loginUser(test_username, test_password);
+        }
+        
+        httplib::Client client(test_host, test_port);
+        httplib::Headers headers = {{"X-Session-Token", session_token}};
+        return client.Get(path, headers);
+    }
+    
+    // HELPER: Authenticated POST (uses API token)
+    httplib::Result makeAuthenticatedPost(const std::string& path, const std::string& body = "") {
+        httplib::Client client(test_host, test_port);
+        httplib::Headers headers = {
+            {"Authorization", "Bearer " + api_token}
+        };
+        return client.Post(path, headers, body, "application/json");
+    }
 };
+
+// STATIC MEMBERS
+std::unique_ptr<NetMonDaemon> NetMonDaemonTest::daemon = nullptr;
+std::thread NetMonDaemonTest::daemon_thread;
+int NetMonDaemonTest::test_port = 9999;
+std::string NetMonDaemonTest::test_host = "localhost";
+std::string NetMonDaemonTest::api_token = "test-token-12345";
+std::string NetMonDaemonTest::test_username = "test_username";
+std::string NetMonDaemonTest::test_password = "test_password";
 
 // =================================
 // Tests
@@ -162,7 +157,6 @@ TEST_F(NetMonDaemonTest, DaemonStartsSuccessfully) {
 
 
 TEST_F(NetMonDaemonTest, MetricsHistoryEndpointReturnsValidJSON) {
-    // ❌ DELETE: std::this_thread::sleep_for(std::chrono::milliseconds(500));
     
     int64_t start = 0;
     int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -340,7 +334,6 @@ TEST_F(NetMonDaemonTest, ControlStopEndpoint) {
 	EXPECT_EQ(j["status"], "stopped");
 	
 	// Verify daemon actually stopped
-	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	EXPECT_FALSE(daemon->isRunning());
 }
 
@@ -517,8 +510,6 @@ TEST_F(NetMonDaemonTest, ExpiredSessionTokenReturns401) {
 	
 	std::string token = short_mgr.createSession("testuser", "127.0.0.1");
 	
-	sleep(2);  // Wait for expiry
-	
 	auto res = makeSessionGet("/metrics", token);
 	EXPECT_EQ(res->status, 401);
 	
@@ -634,7 +625,7 @@ TEST_F(NetMonDaemonTest, MetricsWithNoTrafficReturnsZeros) {
 //     }, std::runtime_error);
 // }
 
-// ✅ ADD: Test PcapAdapter validation directly
+// Test PcapAdapter validation directly
 TEST(NetMonDaemonConfigTest, PcapAdapterValidatesFileExistenceBeforeCapture) {
 	PcapAdapter::Options opts;
 	opts.iface_or_file = "/nonexistent/missing.pcap";
@@ -816,7 +807,7 @@ TEST_F(NetMonDaemonTest, AuthWithVeryLongToken) {
 	};
 	auto res = client.Get("/metrics", headers);
 	
-	// ✅ FIX: httplib returns 400 for malformed/oversized headers
+	// httplib returns 400 for malformed/oversized headers
 	EXPECT_TRUE(res->status == 400 || res->status == 401);  // Either is acceptable
 }
 
@@ -858,8 +849,6 @@ TEST(NetMonDaemonConfigTest, FileBasedDaemonCanReload) {
 		daemon.run();
 	});
 	
-	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-	
 	httplib::Client client("localhost", 9998);
 	httplib::Headers headers = {
 		{"Authorization", "Bearer test-token-123"}
@@ -897,7 +886,7 @@ TEST_F(NetMonDaemonTest, MetricsHistoryEndpointRejectsInvalidParams) {
 
 TEST_F(NetMonDaemonTest, MetricsEndpointReturnsProtocolBreakdown) {
     // Wait for stats to accumulate
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     
     auto res = makeAuthenticatedGet("/metrics");
     ASSERT_TRUE(res != nullptr);
@@ -917,7 +906,7 @@ TEST_F(NetMonDaemonTest, MetricsEndpointReturnsProtocolBreakdown) {
 }
 
 TEST_F(NetMonDaemonTest, MetricsEndpointReturnsActiveFlows) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     
     auto res = makeAuthenticatedGet("/metrics");
     ASSERT_TRUE(res != nullptr);
@@ -1005,7 +994,7 @@ TEST_F(NetMonDaemonTest, MetricsHistoryWithoutStartUsesDefault) {
 // ============================================================
 
 TEST_F(NetMonDaemonTest, TopTalkersEndpointReturnsValidJSON) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     
     auto res = makeAuthenticatedGet("/api/top-talkers");
     ASSERT_TRUE(res != nullptr);
@@ -1032,7 +1021,7 @@ TEST_F(NetMonDaemonTest, TopTalkersRequiresAuth) {
 }
 
 TEST_F(NetMonDaemonTest, PortStatsEndpointReturnsValidJSON) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     
     auto res = makeAuthenticatedGet("/api/port-stats");
     ASSERT_TRUE(res != nullptr);
@@ -1104,7 +1093,7 @@ TEST_F(NetMonDaemonTest, PacketSizesEndpointReturnsValidJSON) {
 
 TEST_F(NetMonDaemonTest, GetServiceNameReturnsKnownPorts) {
     // Test via port-stats endpoint which calls getServiceName()
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     
     auto res = makeAuthenticatedGet("/api/port-stats");
     ASSERT_TRUE(res != nullptr);
@@ -1217,7 +1206,7 @@ TEST_F(NetMonDaemonTest, ReloadRateLimitEnforced) {
 }
 
 TEST_F(NetMonDaemonTest, ReloadWithInvalidConfig) {
-    // ✅ Skip test if daemon is in-memory (can't reload from disk)
+    // Skip test if daemon is in-memory (can't reload from disk)
     if (daemon && daemon->isRunning() && config_path_.empty()) {
         GTEST_SKIP() << "Test skipped: daemon uses in-memory config (cannot reload)";
     }

@@ -5,13 +5,17 @@
 
 class ApiErrorPathsTest : public ::testing::Test {
 protected:
-    std::unique_ptr<NetMonDaemon> daemon;
-    std::thread daemon_thread;
-    std::string test_host = "localhost";
-    int test_port = 9997;
-    std::string api_token = "test-token";
+    static std::unique_ptr<NetMonDaemon> daemon;
+    static std::thread daemon_thread;
+    static std::string test_host;
+    static int test_port;
+    static std::string api_token;
     
-    void SetUp() override {
+    static void SetUpTestSuite() {
+        test_host = "localhost";
+        test_port = 9997;
+        api_token = "test-token";
+        
         YAML::Node config;
         config["interface"]["name"] = "lo0";
         config["api"]["token"] = api_token;
@@ -26,18 +30,34 @@ protected:
         user["password"] = "pass";
         config["users"].push_back(user);
         
-        daemon = std::make_unique<NetMonDaemon>(config, "api-error-test");
-        daemon_thread = std::thread([this]() { daemon->run(); });
+        daemon = std::make_unique<NetMonDaemon>(config, "api-error-test-shared");
+        daemon_thread = std::thread([]() { daemon->run(); });
         
-        // Wait for server startup
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        // Wait for startup (only once)
+        for (int i = 0; i < 10; ++i) {
+            try {
+                httplib::Client client(test_host, test_port);
+                auto res = client.Get("/metrics?token=" + api_token);
+                if (res && res->status > 0) break;
+            } catch (...) {}
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
     }
     
-    void TearDown() override {
-        daemon->stop();
+    static void TearDownTestSuite() {
+        if (daemon) daemon->stop();
         if (daemon_thread.joinable()) daemon_thread.join();
     }
+    
+    void SetUp() override {}
+    void TearDown() override {}
 };
+
+std::unique_ptr<NetMonDaemon> ApiErrorPathsTest::daemon = nullptr;
+std::thread ApiErrorPathsTest::daemon_thread;
+std::string ApiErrorPathsTest::test_host = "localhost";
+int ApiErrorPathsTest::test_port = 9997;
+std::string ApiErrorPathsTest::api_token = "test-token";
 
 TEST_F(ApiErrorPathsTest, Login_MissingUsername) {
     httplib::Client client(test_host, test_port);
