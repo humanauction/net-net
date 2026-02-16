@@ -77,18 +77,20 @@ protected:
     
     // STOP DAEMON AFTER ALL TESTS
     static void TearDownTestSuite() {
-        if (daemon) {
-            daemon->stop();
+        if (!daemon) {
+            return;  
         }
+        try {
 
-        auto start = std::chrono::steady_clock::now();
-        while (daemon->isRunning()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            auto elapsed = std::chrono::steady_clock::now() - start;
-            if (elapsed > std::chrono::seconds(5)) {
-                std::cerr << "ERROR: Daemon did not stop within expected time. Forcing shutdown." << std::endl;
-                break;
-            }
+            daemon->stop();
+
+            auto timeout = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            while (daemon->isRunning() && std::chrono::steady_clock::now() < timeout) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        
+        if (daemon->isRunning()) {
+            std::cerr << "ERROR: Daemon did not stop cleanly within timeout" << std::endl;
         }
 
         if (daemon_thread.joinable()) {
@@ -96,7 +98,13 @@ protected:
         }
 
         daemon.reset();
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Exception during test teardown: " << e.what() << std::endl;
+    } catch (...) {
+        std::cerr << "Unknown exception during test teardown" << std::endl;
     }
+}
     
     // PER-TEST SETUP: only resets session token
     void SetUp() override {

@@ -57,8 +57,37 @@ protected:
     }
     
     static void TearDownTestSuite() {
-        if (daemon) daemon->stop();
-        if (daemon_thread.joinable()) daemon_thread.join();
+        if (!daemon) {
+            return;  // Nothing to clean up
+        }
+        
+        try {
+            // Stop daemon
+            daemon->stop();
+            
+            // Wait for clean stop
+            auto timeout = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            while (daemon->isRunning() && std::chrono::steady_clock::now() < timeout) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+            
+            if (daemon->isRunning()) {
+                std::cerr << "ERROR: Daemon did not stop cleanly within timeout" << std::endl;
+            }
+            
+            // Join thread
+            if (daemon_thread.joinable()) {
+                daemon_thread.join();
+            }
+            
+            // Destroy daemon
+            daemon.reset();
+            
+        } catch (const std::exception& e) {
+            std::cerr << "Exception during test teardown: " << e.what() << std::endl;
+        } catch (...) {
+            std::cerr << "Unknown exception during test teardown" << std::endl;
+        }
     }
     
     void SetUp() override {}
