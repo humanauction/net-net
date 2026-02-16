@@ -18,6 +18,7 @@ VENV=.venv-netnet
 PYTHON=$(VENV)/bin/python3
 PIP=$(VENV)/bin/pip
 PYTEST=$(VENV)/bin/pytest
+GCOVR=$(VENV)/bin/gcovr
 
 CMAKE ?= cmake
 BUILD_DIR ?= build

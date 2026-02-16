@@ -178,7 +178,7 @@ jobs:
   coverage:
     name: Code Coverage
     runs-on: ubuntu-22.04
-    
+  
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -196,12 +196,23 @@ jobs:
           libgtest-dev \
           libsqlite3-dev \
           gettext-base
-        
+      
         cd /tmp
         git clone --depth 1 https://github.com/yhirose/cpp-httplib.git
         cd cpp-httplib
         cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
         sudo cmake --build build --target install
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+
+    - name: Install gcovr
+      run: |
+        python -m pip install --upgrade pip
+        pip install gcovr
 
     - name: Configure CMake with coverage
       run: |
@@ -245,10 +256,6 @@ jobs:
           --print-summary \
           --sort-uncovered
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
 
     - name: Install Python dependencies
       run: |
