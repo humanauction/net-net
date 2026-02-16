@@ -17,13 +17,15 @@ protected:
         api_token = "test-token";
         
         YAML::Node config;
-        config["interface"]["name"] = "lo0";
+        // config["interface"]["name"] = "lo0";
+        config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
         config["api"]["token"] = api_token;
         config["api"]["host"] = test_host;
         config["api"]["port"] = test_port;
         config["stats"]["window_size"] = 1;
         config["stats"]["history_depth"] = 2;
         config["database"]["path"] = ":memory:";
+        config["logging"]["level"] = "error";
         
         YAML::Node user;
         user["username"] = "test";
@@ -34,13 +36,23 @@ protected:
         daemon_thread = std::thread([]() { daemon->run(); });
         
         // Wait for startup (only once)
-        for (int i = 0; i < 10; ++i) {
+        bool daemon_ready = false;
+        for (int i = 0; i < 20; ++i) {
             try {
                 httplib::Client client(test_host, test_port);
+                client.set_read_timeout(2, 0);  // 2 seconds timeout
                 auto res = client.Get("/metrics?token=" + api_token);
-                if (res && res->status > 0) break;
+                if (res && res->status == 200) {
+                    daemon_ready = true;
+                    break;
+                }
             } catch (...) {}
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+
+        if (!daemon_ready) {
+            std::cerr << "ERROR: Daemon did not start within expected time. Tests may fail." << std::endl;
+            throw std::runtime_error("Daemon startup timeout");
         }
     }
     

@@ -125,16 +125,16 @@ demon-offl: build
 
 test: config-ci venv build
 	@echo "==> Running C++ tests..."
-	@cd "$(BUILD_DIR)" && ctest --output-on-failure --verbose
+	@cd "$(BUILD_DIR)" && ctest --output-on-failure --verbose --parallel $(shell sysctl -n hw.ncpu)
 	@echo ""
 	@echo "==> Running Python integration tests..."
 	@$(PYTEST) tests/integration/test_api.py -v
 
-test-cpp: build
+test-fst: build
 	@echo "==> Running C++ tests only..."
 	@cd "$(BUILD_DIR)" && ctest --output-on-failure --parallel $(shell sysctl -n hw.ncpu) --label-exclude slow
 
-test-cpp-all: build
+test-cpp: build
 	@echo "==> Running ALL C++ tests (including slow)..."
 	@cd "$(BUILD_DIR)" && ctest --output-on-failure --parallel $(shell sysctl -n hw.ncpu)
 

@@ -100,11 +100,13 @@ export NETNET_BPF_FILTER=""      # BPF filter (empty = capture all)
 ### Dashboard Overview
 
 ![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](docs/screenshots/dashboard2.png)
+![Dashboard](docs/screenshots/dashboard-responsive.png)
 *Real-time bandwidth monitoring with protocol breakdown and active connections*
 
 ### Login Screen
 
-![Login](docs/screenshots/login.png)
+![Login](docs/screenshots/login-PH.png)
 *Secure session-based authentication*
 
 ---

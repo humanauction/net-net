@@ -323,22 +323,25 @@ TEST_F(NetMonDaemonTest, ControlStartEndpoint) {
 	EXPECT_EQ(j["status"], "started");
 }
 
-// TEST Control Stop Endpoint
-TEST_F(NetMonDaemonTest, ControlStopEndpoint) {
-	auto res = makeAuthenticatedPost("/control/stop");
+// // TEST Control Stop Endpoint
+// TEST_F(NetMonDaemonTest, ControlStopEndpoint) {
+// 	auto res = makeAuthenticatedPost("/control/stop");
 	
-	ASSERT_TRUE(res != nullptr);
-	EXPECT_EQ(res->status, 200);
+// 	ASSERT_TRUE(res != nullptr);
+// 	EXPECT_EQ(res->status, 200);
 	
-	auto j = json::parse(res->body);
-	EXPECT_EQ(j["status"], "stopped");
+// 	auto j = json::parse(res->body);
+// 	EXPECT_EQ(j["status"], "stopped");
 	
-	// Verify daemon actually stopped
-	EXPECT_FALSE(daemon->isRunning());
-}
+// 	// Verify daemon actually stopped
+// 	EXPECT_FALSE(daemon->isRunning());
+// }
 
 // TEST Control Reload Endpoint
 TEST_F(NetMonDaemonTest, ControlReloadEndpoint) {
+
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+    
 	auto res = makeAuthenticatedPost("/control/reload");
 	
 	ASSERT_TRUE(res != nullptr);
@@ -364,6 +367,8 @@ TEST_F(NetMonDaemonTest, ControlEndpointsRequireAuth) {
 
 // TEST Rate Limiting on Control Endpoints
 TEST_F(NetMonDaemonTest, RateLimitingOnControlEndpoints) {
+
+    std::this_thread::sleep_for(std::chrono::seconds(6));
 	// First request succeeds
 	auto res1 = makeAuthenticatedPost("/control/start");
 	EXPECT_EQ(res1->status, 200);
@@ -563,6 +568,9 @@ TEST_F(NetMonDaemonTest, LogoutWithInvalidTokenReturns401) {
 
 // Test multiple rapid control requests (rate limiting)
 TEST_F(NetMonDaemonTest, MultipleRapidControlRequestsBlocked) {
+
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+
 	auto res1 = makeAuthenticatedPost("/control/reload");
 	EXPECT_EQ(res1->status, 200);
 	
@@ -575,6 +583,9 @@ TEST_F(NetMonDaemonTest, MultipleRapidControlRequestsBlocked) {
 
 // Test control endpoints with session token (not just API token)
 TEST_F(NetMonDaemonTest, ControlEndpointsWorkWithSessionToken) {
+
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+
 	std::string token = loginUser(test_username, test_password);
 	ASSERT_FALSE(token.empty());
 	
@@ -1188,6 +1199,9 @@ TEST_F(NetMonDaemonTest, LoginWithMalformedJSON) {
 // ============================================================
 
 TEST_F(NetMonDaemonTest, ReloadRateLimitEnforced) {
+
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+
     auto token = loginUser(test_username, test_password);
     
     httplib::Client client(test_host, test_port);
@@ -1211,6 +1225,8 @@ TEST_F(NetMonDaemonTest, ReloadWithInvalidConfig) {
         GTEST_SKIP() << "Test skipped: daemon uses in-memory config (cannot reload)";
     }
 
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+
     auto token = loginUser(test_username, test_password);
     
     // Create a temporary file-based config
@@ -1227,8 +1243,6 @@ TEST_F(NetMonDaemonTest, ReloadWithInvalidConfig) {
     
     httplib::Client client(test_host, test_port);
     httplib::Headers headers = {{"X-Session-Token", token}};
-    
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));  // Rate limit
     
     auto res = client.Post("/control/reload", headers, "", "application/json");
     
@@ -1260,7 +1274,7 @@ TEST_F(NetMonDaemonTest, MetricsHistoryRequiresAuth) {
 // ============================================================
 
 TEST_F(NetMonDaemonTest, ProtocolBreakdownIncludesTCPUDPOther) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     auto res = makeAuthenticatedGet("/metrics");
     ASSERT_TRUE(res != nullptr);
     EXPECT_EQ(res->status, 200);
@@ -1478,4 +1492,68 @@ TEST_F(NetMonDaemonTest, GetServiceNameReturnsEmptyForUnknownPort) {
             EXPECT_EQ(port_stat["service"], "");
         }
     }
+}
+
+// SEPARATED FIXTURE for tests that stop daemon
+class NetMonDaemonStopTest : public ::testing::Test {
+protected:
+    std::unique_ptr<NetMonDaemon> daemon;
+    std::thread daemon_thread;
+    
+    void SetUp() override {
+        YAML::Node config;
+        config["offline"]["file"] = "tests/fixtures/icmp_sample.pcap";
+        config["stats"]["window_size"] = 1;
+        config["stats"]["history_depth"] = 2;
+        config["database"]["path"] = ":memory:";
+        config["api"]["token"] = "test-token-12345";
+        config["api"]["host"] = "localhost";
+        config["api"]["port"] = 9996;  // Different port
+        config["api"]["session_expiry"] = 60;
+        config["logging"]["level"] = "error";
+        
+        daemon = std::make_unique<NetMonDaemon>(config, "test-stop-daemon");
+        daemon_thread = std::thread([this]() { daemon->run(); });
+        
+        // Wait for startup
+        for (int i = 0; i < 10; ++i) {
+            try {
+                httplib::Client client("localhost", 9996);
+                auto res = client.Get("/metrics?token=test-token-12345");
+                if (res && res->status > 0) break;
+            } catch (...) {}
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+    }
+    
+    void TearDown() override {
+        if (daemon) daemon->stop();
+        if (daemon_thread.joinable()) daemon_thread.join();
+    }
+};
+
+// STOP TESTS HERE
+TEST_F(NetMonDaemonStopTest, ControlStopEndpoint) {
+    httplib::Client client("localhost", 9996);
+    httplib::Headers headers = {
+        {"Authorization", "Bearer test-token-12345"}
+    };
+    
+    auto res = client.Post("/control/stop", headers, "", "application/json");
+    ASSERT_TRUE(res != nullptr);
+    EXPECT_EQ(res->status, 200);
+    
+    auto j = json::parse(res->body);
+    EXPECT_EQ(j["status"], "stopped");
+    
+    EXPECT_FALSE(daemon->isRunning());
+}
+
+TEST_F(NetMonDaemonStopTest, StopDaemonIsIdempotent) {
+    daemon->stop();
+    EXPECT_FALSE(daemon->isRunning());
+    
+    EXPECT_NO_THROW({
+        daemon->stop();
+    });
 }

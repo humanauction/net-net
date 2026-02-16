@@ -76,12 +76,6 @@ jobs:
         sudo pkill -9 netnet-daemon || true
         sleep 1
 
-    - name: Start netnet-daemon (for Python tests)
-      run: |
-        sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml > /tmp/netnet-daemon.log 2>&1 &
-        sleep 5
-          echo "Checking if daemon process is running..."
-          
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -107,13 +101,6 @@ jobs:
     - name: Patch config for interface
       run: |
         envsubst < examples/sample-config.yaml > examples/sample-config.ci.yaml
-
-    - name: Start netnet-daemon
-      run: |
-        sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml > /tmp/netnet-daemon.log 2>&1 &
-        sleep 5
-        echo "Checking if daemon process is running..."
-        ps aux | grep netnet-daemon || echo "Daemon not found in process list"
 
     - name: Print daemon logs
       run: |
