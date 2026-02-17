@@ -177,6 +177,10 @@ TEST_F(NetMonDaemonTest, MetricsHistoryEndpointReturnsValidJSON) {
     int64_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::string url = "/metrics/history?start=" + std::to_string(start) + 
                       "&end=" + std::to_string(now) + "&limit=10";
+
+    if (!std::filesystem::exists("tests/fixtures/icmp_sample.pcap") || std::filesystem::file_size("tests/fixtures/icmp_sample.pcap") == 0) {
+        GTEST_SKIP() << "Required pcap file missing or empty"; 
+    }
     
     auto res = makeAuthenticatedGet(url);
 
@@ -188,7 +192,7 @@ TEST_F(NetMonDaemonTest, MetricsHistoryEndpointReturnsValidJSON) {
     EXPECT_TRUE(j.contains("windows"));
     EXPECT_GE(j["windows"].size(), 1) << "Expected at least 1 window from offline pcap";
     
-    if (!std::filesystem::exists("tests/fixtures/icmp_sample.pcap") || std::filesystem::file_size("tests/fixtures/icmp_sample.pcap") == 0) { GTEST_SKIP() << "Required pcap file missing or empty"; }
+    
 
     if (!j["windows"].empty()) {
         auto& w = j["windows"][0];

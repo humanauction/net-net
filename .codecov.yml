@@ -8,7 +8,7 @@ coverage:
       default:
         target: 85%
 
-# Critical: Tell Codecov to ignore vendor files
+# Exclude specific files and directories from coverage reporting
 ignore:
   - "include/net-net/vendor/**/*"
   - "vendor/**/*"
