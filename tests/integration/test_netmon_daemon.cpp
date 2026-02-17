@@ -73,6 +73,8 @@ protected:
             } catch (...) {}
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
     
     // STOP DAEMON AFTER ALL TESTS
