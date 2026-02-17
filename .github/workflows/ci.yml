@@ -227,6 +227,12 @@ jobs:
     - name: Build with coverage
       run: cmake --build build
 
+    - name: Generate test PCAP file
+      run: |
+        pip install scapy
+        python make_icmp_pcap.py
+        ls -lh tests/fixtures/icmp_sample.pcap
+
     - name: Copy test fixtures
       run: |
         mkdir -p build/tests/fixtures
