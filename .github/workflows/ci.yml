@@ -102,22 +102,25 @@ jobs:
       run: |
         envsubst < examples/sample-config.yaml > examples/sample-config.ci.yaml
 
-    - name: Print daemon logs
+    - name: Start netnet-daemon
       run: |
-        cat /tmp/netnet-daemon.log || true
+        sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml > /tmp/netnet-daemon.log 2>&1 &
+        echo $! | sudo tee /tmp/netnet-daemon.pid
+        sleep 3
 
     - name: Wait for /login endpoint
       run: |
         for i in {1..30}; do
           status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/login || echo 000)
-          if [ "$status" = "200" ] || [ "$status" = "404" ]; then
+          if [ "$status" = "200" ] || [ "$status" = "404" ] || [ "$status" = "400" ]; then
             echo "Daemon is up! (status: $status)"
             exit 0
           fi
-          echo "Waiting for daemon..."
+          echo "Waiting for daemon... (attempt $i/30)"
           sleep 2
         done
         echo "Daemon did not start in time." >&2
+        cat /tmp/netnet-daemon.log || echo "No log found"
         exit 1
 
     - name: Print daemon log failure
@@ -133,7 +136,9 @@ jobs:
 
     - name: Stop daemon
       run: |
+        sudo kill $(cat /tmp/netnet-daemon.pid) || true
         sudo pkill netnet-daemon || true
+        sleep 1
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -208,7 +213,6 @@ jobs:
       with:
         python-version: '3.13'
 
-
     - name: Install gcovr
       run: |
         python -m pip install --upgrade pip
@@ -256,7 +260,6 @@ jobs:
           --print-summary \
           --sort-uncovered
 
-
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
@@ -272,30 +275,45 @@ jobs:
       run: |
         envsubst < examples/sample-config.yaml > examples/sample-config.ci.yaml
 
+    # Clean stale files
     - name: Clean stale session database
       run: |
         rm -f examples/sample-config.ci.yaml.sessions 2>/dev/null || true
         rm -f /tmp/*.db* 2>/dev/null || true
+        sudo pkill -9 netnet-daemon 2>/dev/null || true
 
+    # Start daemon with logging
     - name: Start netnet-daemon
       run: |
-        sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml &
-        echo $! > /tmp/netnet-daemon.pid
+        sudo ./build/netnet-daemon --config examples/sample-config.ci.yaml > /tmp/netnet-daemon-coverage.log 2>&1 &
+        echo $! | sudo tee /tmp/netnet-daemon.pid
         sleep 3
 
+    # wait logic, status check
     - name: Wait for daemon
       run: |
         for i in {1..10}; do
-          curl -s http://localhost:8082/ && break || sleep 1
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/ 2>/dev/null || echo 000)
+          if [ "$status" = "200" ] || [ "$status" = "404" ]; then
+            echo "Coverage daemon is up! (status: $status)"
+            exit 0
+          fi
+          echo "Waiting for coverage daemon... (attempt $i/10)"
+          sleep 1
         done
+        echo "Coverage daemon failed to start" >&2
+        cat /tmp/netnet-daemon-coverage.log || echo "No log found"
+        exit 1
 
     - name: Run Python integration tests
       run: |
         pytest tests/integration/test_api.py -v
 
+    # Stop daemon and print log if failure
     - name: Stop daemon
       run: |
         sudo kill $(cat /tmp/netnet-daemon.pid) || true
+        sudo pkill netnet-daemon || true
         sleep 1
 
     - name: Upload C++ coverage to Codecov

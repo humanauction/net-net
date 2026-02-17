@@ -67,6 +67,7 @@ build:
 	@$(CMAKE) -S . -B "$(BUILD_DIR)" -G "Unix Makefiles" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)"
 	@echo "==> Building..."
 	@$(CMAKE) --build "$(BUILD_DIR)" -- -j$(shell sysctl -n hw.ncpu)
+
 rebuild: clean build
 
 .PHONY: clean-coverage
