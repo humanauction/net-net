@@ -183,12 +183,13 @@ TEST_F(NetMonDaemonTest, MetricsHistoryEndpointReturnsValidJSON) {
     ASSERT_TRUE(res != nullptr);
     EXPECT_EQ(res->status, 200);
 
-    if (!std::filesystem::exists("tests/fixtures/icmp_sample.pcap") || std::filesystem::file_size("tests/fixtures/icmp_sample.pcap") == 0) { GTEST_SKIP() << "Required pcap file missing or empty"; }
     
     auto j = nlohmann::json::parse(res->body);
     EXPECT_TRUE(j.contains("windows"));
     EXPECT_GE(j["windows"].size(), 1) << "Expected at least 1 window from offline pcap";
     
+    if (!std::filesystem::exists("tests/fixtures/icmp_sample.pcap") || std::filesystem::file_size("tests/fixtures/icmp_sample.pcap") == 0) { GTEST_SKIP() << "Required pcap file missing or empty"; }
+
     if (!j["windows"].empty()) {
         auto& w = j["windows"][0];
         EXPECT_TRUE(w.contains("timestamp"));
