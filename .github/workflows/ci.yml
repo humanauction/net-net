@@ -298,14 +298,14 @@ jobs:
     # wait logic, status check
     - name: Wait for daemon
       run: |
-        for i in {1..10}; do
-          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/ 2>/dev/null || echo 000)
-          if [ "$status" = "200" ] || [ "$status" = "404" ]; then
+        for i in {1..30}; do
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/login || echo 000)
+          if [ "$status" = "200" ] || [ "$status" = "404" ] || [ "$status" = "400" ]; then
             echo "Coverage daemon is up! (status: $status)"
             exit 0
           fi
-          echo "Waiting for coverage daemon... (attempt $i/10)"
-          sleep 1
+          echo "Waiting for coverage daemon... (attempt $i/30)"
+          sleep 2
         done
         echo "Coverage daemon failed to start" >&2
         cat /tmp/netnet-daemon-coverage.log || echo "No log found"
@@ -313,6 +313,7 @@ jobs:
 
     - name: Run Python integration tests
       run: |
+        pytest tests/integration/test_authentication.py -v
         pytest tests/integration/test_api.py -v
 
     # Stop daemon and print log if failure
