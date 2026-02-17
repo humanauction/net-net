@@ -232,6 +232,15 @@ jobs:
         pip install scapy
         python make_icmp_pcap.py
         ls -lh tests/fixtures/icmp_sample.pcap
+    
+    - name: Verify PCAP contents
+      run: |
+        echo "=== PCAP File Info ==="
+        ls -lh tests/fixtures/icmp_sample.pcap
+        echo "=== Packet Count ==="
+        tcpdump -r tests/fixtures/icmp_sample.pcap -n 2>/dev/null | wc -l
+        echo "=== First 5 Packets ==="
+        tcpdump -r tests/fixtures/icmp_sample.pcap -n -c 5
 
     - name: Copy test fixtures
       run: |
@@ -243,6 +252,11 @@ jobs:
         cd build
         ctest --output-on-failure --verbose
         cd ..
+    
+    - name: Wait for stats aggregation
+      run: |
+        echo "Waiting for offline pcap to be processed..."
+        sleep 5
 
     - name: Remove vendor coverage files
       run: |
@@ -316,13 +330,6 @@ jobs:
         pytest tests/integration/test_authentication.py -v
         pytest tests/integration/test_api.py -v
 
-    # Stop daemon and print log if failure
-    - name: Stop daemon
-      run: |
-        sudo kill $(cat /tmp/netnet-daemon.pid) || true
-        sudo pkill netnet-daemon || true
-        sleep 1
-
     - name: Upload C++ coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
@@ -330,3 +337,12 @@ jobs:
         flags: cpp
         name: cpp-coverage
         token: ${{ secrets.CODECOV_TOKEN }}
+    
+        # Stop daemon and print log if failure
+    - name: Stop daemon
+      run: |
+        sudo kill $(cat /tmp/netnet-daemon.pid) || true
+        sudo pkill netnet-daemon || true
+        sleep 1
+
+    
