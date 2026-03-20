@@ -20,7 +20,7 @@ ignore:
   - "CMakeFiles/**/*"
   - "src/main.cpp"
   - "src/daemon/Main.cpp"
-  - "**/*.h"  # Optional: exclude headers if you don't want them counted
+  - "**/*.h"  # Optional: exclude headers if don't want them counted
 
 comment:
   layout: "reach,diff,flags,tree"
