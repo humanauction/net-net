@@ -124,6 +124,9 @@ tests/integration/__pycache__/
 *.sessions
 *.sessions-*
 
+# Local agent/session context; durable decisions belong in committed docs.
+docs/handover/current.md
+
 # Ignore codecov token file
 codecov
 codecov.SHA256SUM

@@ -508,7 +508,9 @@ TEST_F(SessionManagerTest, CleanupExpiredWithNoExpiredSessions) {
 
 // TEST: createSession with Unicode characters
 TEST_F(SessionManagerTest, CreateSessionAcceptsUnicodeCharacters) {
-    std::string unicode_user = u8"用户名";  // "username" in Chinese
+    // The source file is UTF-8. In C++20, a u8 literal is char8_t and cannot
+    // implicitly initialise std::string, which intentionally stores char.
+    std::string unicode_user = "用户名";  // "username" in Chinese
     std::string token;
     
     EXPECT_NO_THROW({

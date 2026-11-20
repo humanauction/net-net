@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.15)
-project(net-net CXX)
+cmake_minimum_required(VERSION 3.24)
+project(net-net VERSION 0.2.0 LANGUAGES CXX)
 
 # =========================
 # IMPORTANT: Before running the daemon or tests, generate a config file with the correct interface:
@@ -7,32 +7,83 @@ project(net-net CXX)
 # This will create examples/sample-config.ci.yaml with the correct interface name.
 # =========================
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Generate coverage data
-if(CMAKE_BUILD_TYPE MATCHES Debug)
+include(CTest)
+include(FetchContent)
+
+# Coverage is opt-in: Debug builds must be usable without compiler-specific
+# instrumentation, and coverage should never be enabled in a release artifact.
+option(NETNET_ENABLE_COVERAGE "Enable compiler coverage instrumentation" OFF)
+if(NETNET_ENABLE_COVERAGE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -fprofile-arcs -ftest-coverage")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
 endif()
 
-# Set PKG_CONFIG_PATH for keg-only libpcap
-set(ENV{PKG_CONFIG_PATH} "/usr/local/opt/libpcap/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+# libpcap is commonly exposed through pkg-config on Linux. Homebrew marks it
+# keg-only, so fall back to stable Homebrew *opt* symlinks (never Cellar
+# version paths) on macOS. PCAP_ROOT takes precedence for custom installs.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(PCAP QUIET libpcap)
+endif()
 
-# pkg-config and modules
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(PCAP REQUIRED libpcap)
+if(NOT PCAP_FOUND)
+    set(_netnet_pcap_hints)
+    if(DEFINED ENV{PCAP_ROOT})
+        list(APPEND _netnet_pcap_hints "$ENV{PCAP_ROOT}")
+    endif()
+    if(APPLE)
+        list(APPEND _netnet_pcap_hints
+            /opt/homebrew/opt/libpcap
+            /usr/local/opt/libpcap
+        )
+    endif()
+    find_path(PCAP_INCLUDE_DIR
+        NAMES pcap/pcap.h
+        HINTS ${_netnet_pcap_hints}
+        PATH_SUFFIXES include
+    )
+    find_library(PCAP_LIBRARY
+        NAMES pcap libpcap
+        HINTS ${_netnet_pcap_hints}
+        PATH_SUFFIXES lib
+    )
+    if(NOT PCAP_INCLUDE_DIR OR NOT PCAP_LIBRARY)
+        message(FATAL_ERROR
+            "libpcap was not found. Install libpcap development files, set "
+            "PCAP_ROOT, or make libpcap visible to pkg-config."
+        )
+    endif()
+    set(PCAP_FOUND TRUE)
+    set(PCAP_INCLUDE_DIRS "${PCAP_INCLUDE_DIR}")
+    set(PCAP_LIBRARIES "${PCAP_LIBRARY}")
+endif()
 
-# Find OpenSSL, yaml-cpp, nlohmann_json early
-find_package(OpenSSL REQUIRED)
-find_package(yaml-cpp REQUIRED)
-find_package(nlohmann_json REQUIRED)
-include(FetchContent)
+# Host-provided libraries are intentionally discovered through their CMake
+# packages. Their minimum versions document the supported security baseline.
+find_package(OpenSSL 3.0 REQUIRED)
+find_package(yaml-cpp 0.8 REQUIRED)
+find_package(nlohmann_json 3.12 REQUIRED)
+find_package(GTest 1.17 REQUIRED)
 
+# Third-party source dependencies are pinned to immutable upstream commits.
+# See docs/dependency-policy.md before changing a pin.
 FetchContent_Declare(
     SQLiteCpp
     GIT_REPOSITORY https://github.com/SRombauts/SQLiteCpp.git
-    GIT_TAG        3.3.1  # Latest stable version
+    GIT_TAG        4eb9964c2d71a3c03ebd04291f093a78783f58cf # 3.3.1
+    GIT_SHALLOW    TRUE
+)
+
+FetchContent_Declare(
+    cpp_httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG        4f3f9ef19be83ae97a5d9a059432dc00e445b7ab # v0.58.0
+    GIT_SHALLOW    TRUE
 )
 
 set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
@@ -40,15 +91,7 @@ set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
 set(SQLITECPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SQLITECPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(SQLiteCpp)
-
-# Find or add cpp-httplib
-find_path(HTTPLIB_INCLUDE_DIR httplib.h
-    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/include/net-net/vendor
-)
-if(NOT HTTPLIB_INCLUDE_DIR)
-    message(FATAL_ERROR "httplib.h not found. Install: brew install cpp-httplib")
-endif()
+FetchContent_MakeAvailable(SQLiteCpp cpp_httplib)
 
 # Environment flags
 # libxcrypt flags
@@ -111,8 +154,6 @@ target_link_libraries(netnet
 )
 
 # Testing setup
-enable_testing()
-find_package(GTest REQUIRED)
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/CMake/config.h.in
@@ -278,6 +319,7 @@ target_link_libraries(netnet-daemon-lib
         netnet-core
         yaml-cpp
         nlohmann_json::nlohmann_json
+        httplib::httplib
         pthread
         OpenSSL::SSL
         OpenSSL::Crypto
@@ -451,7 +493,10 @@ set_property(TEST test_netmon_daemon test_parser test_connection_tracker
 
 # ONLY serialize daemon tests (avoid port conflicts)
 set_tests_properties(test_netmon_daemon test_api_error_paths test_netmon_error_paths
-    PROPERTIES RUN_SERIAL TRUE
+    PROPERTIES
+        # These suites bind the same test API port. A resource lock prevents
+        # collisions while preserving parallel execution for other tests.
+        RESOURCE_LOCK netnet-api
 )
 
 # Allow other tests to run in parallel
