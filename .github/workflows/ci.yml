@@ -23,8 +23,19 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          build-essential cmake libpcap-dev libyaml-cpp-dev nlohmann-json3-dev \
-          libssl-dev libsqlite3-dev libgtest-dev pkg-config clang-format uuid-dev
+          build-essential python3-pip libpcap-dev libssl-dev libsqlite3-dev \
+          pkg-config clang-format uuid-dev
+        python3 -m pip install 'cmake>=3.24,<4'
+        git clone --depth 1 --branch 0.8.0 https://github.com/jbeder/yaml-cpp.git /tmp/yaml-cpp
+        cmake -S /tmp/yaml-cpp -B /tmp/yaml-cpp/build -DYAML_BUILD_SHARED_LIBS=ON -DYAML_CPP_BUILD_TESTS=OFF
+        sudo cmake --build /tmp/yaml-cpp/build --target install
+        git clone --depth 1 --branch v3.12.0 https://github.com/nlohmann/json.git /tmp/nlohmann-json
+        cmake -S /tmp/nlohmann-json -B /tmp/nlohmann-json/build -DJSON_BuildTests=OFF
+        sudo cmake --build /tmp/nlohmann-json/build --target install
+        git clone --depth 1 --branch v1.17.0 https://github.com/google/googletest.git /tmp/googletest
+        cmake -S /tmp/googletest -B /tmp/googletest/build -DBUILD_GMOCK=OFF
+        sudo cmake --build /tmp/googletest/build --target install
+        sudo ldconfig
         cd /tmp
         git clone https://github.com/yhirose/cpp-httplib.git
         cd cpp-httplib
@@ -192,16 +203,25 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          cmake \
           g++ \
+          python3-pip \
           libpcap-dev \
           libssl-dev \
-          libyaml-cpp-dev \
-          nlohmann-json3-dev \
-          libgtest-dev \
           libsqlite3-dev \
           gettext-base
-      
+        python3 -m pip install 'cmake>=3.24,<4'
+
+        git clone --depth 1 --branch 0.8.0 https://github.com/jbeder/yaml-cpp.git /tmp/yaml-cpp
+        cmake -S /tmp/yaml-cpp -B /tmp/yaml-cpp/build -DYAML_BUILD_SHARED_LIBS=ON -DYAML_CPP_BUILD_TESTS=OFF
+        sudo cmake --build /tmp/yaml-cpp/build --target install
+        git clone --depth 1 --branch v3.12.0 https://github.com/nlohmann/json.git /tmp/nlohmann-json
+        cmake -S /tmp/nlohmann-json -B /tmp/nlohmann-json/build -DJSON_BuildTests=OFF
+        sudo cmake --build /tmp/nlohmann-json/build --target install
+        git clone --depth 1 --branch v1.17.0 https://github.com/google/googletest.git /tmp/googletest
+        cmake -S /tmp/googletest -B /tmp/googletest/build -DBUILD_GMOCK=OFF
+        sudo cmake --build /tmp/googletest/build --target install
+        sudo ldconfig
+
         cd /tmp
         git clone --depth 1 https://github.com/yhirose/cpp-httplib.git
         cd cpp-httplib
